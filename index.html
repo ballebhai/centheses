@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Centheses — Biochemistry Pathway Emulator</title>
+<style>
+  :root{
+    --bg:#04070f;
+    --bg2:#080d1a;
+    --panel:rgba(255,255,255,.04);
+    --line:rgba(255,255,255,.09);
+    --txt:#e8eefc;
+    --mut:#8b98b8;
+    --cyan:#22d3ee;
+    --vio:#a78bfa;
+    --lime:#bef264;
+    --pink:#f472b6;
+    --amber:#fbbf24;
+    --radius:20px;
+    --font: ui-sans-system, -apple-system, "Inter", "SF Pro", Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--txt); font-family:var(--font);
+    overflow-x:hidden;
+    background-image:
+      radial-gradient(1200px 600px at 15% -5%, rgba(34,211,238,.14), transparent 60%),
+      radial-gradient(1000px 600px at 90% 10%, rgba(167,139,250,.16), transparent 60%),
+      radial-gradient(900px 600px at 50% 110%, rgba(190,242,100,.07), transparent 60%);
+    background-attachment:fixed;
+  }
+  ::selection{background:rgba(34,211,238,.3)}
+  a{color:inherit; text-decoration:none}
+  /* NAV */
+  nav{
+    position:fixed; top:16px; left:50%; transform:translateX(-50%);
+    width:min(1120px, calc(100% - 24px)); z-index:50;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 18px; border-radius:18px;
+    background:rgba(8,13,26,.72); backdrop-filter:blur(18px);
+    border:1px solid var(--line);
+  }
+  .brand{display:flex; gap:12px; align-items:center; font-weight:800; letter-spacing:.2px}
+  .logo{
+    width:36px; height:36px; border-radius:12px; display:grid; place-items:center;
+    background:linear-gradient(135deg,var(--cyan),var(--vio));
+    box-shadow:0 8px 30px rgba(34,211,238,.35);
+  }
+  .brand small{display:block; font-weight:500; color:var(--mut); font-size:11px; letter-spacing:.18em; text-transform:uppercase}
+  .links{display:flex; gap:22px; color:var(--mut); font-size:14px}
+  .links a:hover{color:#fff}
+  .btn{
+    border:1px solid var(--line); background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.02));
+    padding:10px 18px; border-radius:12px; font-weight:700; font-size:14px; cursor:pointer; color:var(--txt);
+    transition:.2s; display:inline-flex; align-items:center; gap:8px;
+  }
+  .btn:hover{transform:translateY(-1px); border-color:rgba(34,211,238,.5)}
+  .btn.primary{background:linear-gradient(135deg,#22d3ee,#818cf8 55%,#e879f9); border:0; color:#04070f; box-shadow:0 10px 40px rgba(34,211,238,.35)}
+  /* HERO */
+  .hero{position:relative; min-height:100vh; display:grid; place-items:center; padding:130px 20px 40px; overflow:hidden}
+  #net{position:absolute; inset:0; width:100%; height:100%; opacity:.9}
+  .grid-overlay{
+    position:absolute; inset:0; pointer-events:none;
+    background-image:linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px),linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px);
+    background-size:56px 56px; mask-image:radial-gradient(700px 500px at 50% 40%, black, transparent 75%);
+  }
+  .orb{position:absolute; border-radius:50%; filter:blur(80px); opacity:.5; pointer-events:none; animation:float 9s ease-in-out infinite}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-30px)}}
+  .hero-inner{position:relative; width:min(1120px,100%); text-align:center}
+  .pill{
+    display:inline-flex; align-items:center; gap:10px; padding:8px 14px; border-radius:999px;
+    border:1px solid rgba(34,211,238,.35); background:rgba(34,211,238,.08);
+    font-size:12.5px; letter-spacing:.14em; text-transform:uppercase; color:#a5f3fc;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:#22d3ee;box-shadow:0 0 12px #22d3ee;animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  h1{
+    font-size:clamp(42px,7.5vw,88px); line-height:.95; margin:22px 0 16px; letter-spacing:-.04em; font-weight:900;
+  }
+  h1 .grad{background:linear-gradient(90deg,#22d3ee,#a78bfa,#f472b6,#bef264); -webkit-background-clip:text; background-clip:text; color:transparent}
+  .sub{color:var(--mut); font-size:clamp(15px,2vw,19px); max-width:700px; margin:0 auto; line-height:1.6}
+  .sub b{color:var(--txt)}
+  #typed{color:var(--cyan); font-family:var(--mono); font-weight:700}
+  .cta-row{display:flex; gap:12px; justify-content:center; margin-top:28px; flex-wrap:wrap}
+  .hero-stats{display:flex; gap:12px; justify-content:center; margin-top:34px; flex-wrap:wrap}
+  .stat{
+    min-width:150px; padding:14px 18px; border-radius:16px; background:var(--panel);
+    border:1px solid var(--line); backdrop-filter:blur(10px); text-align:left;
+  }
+  .stat span{font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--mut)}
+  .stat strong{display:block; font-size:26px; margin-top:4px; font-variant-numeric:tabular-nums}
+  .scroll-hint{margin-top:36px; color:var(--mut); font-size:12px; letter-spacing:.2em; text-transform:uppercase}
+  /* MARQUEE */
+  .marquee{border-top:1px solid var(--line); border-bottom:1px solid var(--line); background:rgba(255,255,255,.02); overflow:hidden; white-space:nowrap; padding:14px 0}
+  .marquee div{display:inline-block; animation:scroll 28s linear infinite; font-family:var(--mono); color:var(--mut); font-size:13px; letter-spacing:.12em}
+  .marquee b{color:var(--cyan); margin:0 18px}
+  @keyframes scroll{to{transform:translateX(-50%)}}
+  /* SECTIONS */
+  section.block{width:min(1120px, calc(100% - 32px)); margin:70px auto}
+  .sec-head{display:flex; align-items:end; justify-content:space-between; gap:16px; margin-bottom:20px; flex-wrap:wrap}
+  .sec-head h2{margin:0; font-size:clamp(26px,4vw,42px); letter-spacing:-.03em}
+  .sec-head p{margin:8px 0 0; color:var(--mut); max-width:560px; line-height:1.6}
+  .kicker{font-family:var(--mono); font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--lime)}
+  .card{background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.015)); border:1px solid var(--line); border-radius:var(--radius); backdrop-filter:blur(14px)}
+  /* LAB */
+  .lab{display:grid; grid-template-columns:280px 1fr 300px; gap:14px}
+  @media(max-width:980px){.lab{grid-template-columns:1fr}}
+  .path-list{padding:12px; display:flex; flex-direction:column; gap:10px}
+  .path-btn{
+    text-align:left; padding:14px; border-radius:14px; border:1px solid transparent;
+    background:transparent; color:var(--txt); cursor:pointer; transition:.2s;
+  }
+  .path-btn small{color:var(--mut); display:block; margin-top:4px; line-height:1.4}
+  .path-btn.active{background:rgba(34,211,238,.1); border-color:rgba(34,211,238,.35)}
+  .path-btn:hover{background:rgba(255,255,255,.05)}
+  .path-btn .tag{font-size:11px; font-family:var(--mono); padding:3px 8px; border-radius:999px; background:rgba(255,255,255,.08); display:inline-block; margin-bottom:6px}
+  .reactor{padding:22px; position:relative; overflow:hidden; min-height:520px}
+  .reactor-top{display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap}
+  .controls{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+  .icon-btn{width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.06);color:#fff;font-size:18px;cursor:pointer}
+  .icon-btn:hover{border-color:var(--cyan)}
+  .slider-group{display:flex; gap:14px; margin:16px 0; flex-wrap:wrap}
+  .slider-group label{font-size:12px; color:var(--mut); display:block; margin-bottom:6px; letter-spacing:.08em; text-transform:uppercase}
+  input[type=range]{accent-color:var(--cyan); width:160px}
+  .reaction-stage{
+    margin-top:8px; border-radius:16px; border:1px solid var(--line);
+    background:radial-gradient(500px 260px at 50% 0%, rgba(34,211,238,.12), transparent), rgba(0,0,0,.3);
+    padding:22px; position:relative; overflow:hidden;
+  }
+  .mol-flow{display:flex; align-items:center; justify-content:space-between; gap:12px; margin:18px 0}
+  .mol{
+    flex:1; padding:16px; border-radius:14px; text-align:center;
+    background:rgba(255,255,255,.05); border:1px solid var(--line);
+    transition:.4s;
+  }
+  .mol h4{margin:0 0 4px; font-size:18px}
+  .mol span{font-family:var(--mono); font-size:12px; color:var(--mut)}
+  .arrow{font-size:28px; color:var(--cyan); animation:nudge 1.2s ease-in-out infinite}
+  @keyframes nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(6px)}}
+  .enzyme-badge{
+    display:inline-flex; gap:8px; align-items:center; font-family:var(--mono); font-size:12.5px;
+    padding:8px 12px; border-radius:999px; background:rgba(190,242,100,.1); border:1px solid rgba(190,242,100,.3); color:#d9f99d;
+  }
+  .steps{margin-top:16px; display:flex; flex-direction:column; gap:8px; max-height:280px; overflow:auto; padding-right:4px}
+  .step-row{display:flex; gap:12px; align-items:center; padding:10px 12px; border-radius:12px; border:1px solid transparent; font-size:13.5px; cursor:pointer}
+  .step-row:hover{background:rgba(255,255,255,.04)}
+  .step-row.active{background:rgba(167,139,250,.12); border-color:rgba(167,139,250,.4)}
+  .step-row.done{opacity:.55}
+  .step-num{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.08);font-family:var(--mono);font-size:12px;flex-shrink:0}
+  .step-row.active .step-num{background:var(--vio); color:#04070f; font-weight:800}
+  .step-row.done .step-num{background:rgba(190,242,100,.2); color:var(--lime)}
+  .progress{height:6px; background:rgba(255,255,255,.08); border-radius:999px; overflow:hidden; margin-top:14px}
+  .progress i{display:block; height:100%; background:linear-gradient(90deg,var(--cyan),var(--vio),var(--pink)); width:0%; transition:.5s}
+  .side{padding:18px; display:flex; flex-direction:column; gap:14px}
+  .energy-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .e-box{padding:12px; border-radius:14px; background:rgba(0,0,0,.3); border:1px solid var(--line); text-align:center}
+  .e-box strong{font-size:22px; display:block; font-variant-numeric:tabular-nums}
+  .e-box span{font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--mut)}
+  .detail{font-size:13.5px; line-height:1.6; color:#cbd5e1}
+  .detail code{font-family:var(--mono); background:rgba(255,255,255,.08); padding:2px 6px; border-radius:6px; color:var(--cyan)}
+  .dg-bar{height:8px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden}
+  .dg-bar i{display:block; height:100%; background:linear-gradient(90deg,#bef264,#22d3ee)}
+  /* KINETICS */
+  .kin-grid{display:grid; grid-template-columns:360px 1fr; gap:14px}
+  @media(max-width:980px){.kin-grid{grid-template-columns:1fr}}
+  .kin-controls{padding:20px}
+  .kin-controls .row{margin:14px 0}
+  .kin-controls output{font-family:var(--mono); color:var(--cyan)}
+  #mmCanvas{width:100%; height:360px; display:block; background:rgba(0,0,0,.35); border-radius:16px; border:1px solid var(--line)}
+  /* MOLECULES — agents of life */
+  .mol-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:14px}
+  @media(max-width:980px){.mol-grid{grid-template-columns:1fr 1fr}}
+  @media(max-width:640px){.mol-grid{grid-template-columns:1fr}}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; align-items:center; font-family:var(--mono); font-size:11.5px; color:var(--mut)}
+  .legend i{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:-1px}
+  .mol-card{padding:18px; transition:.25s; cursor:pointer; position:relative; overflow:hidden; display:flex; flex-direction:column}
+  .mol-card:hover{transform:translateY(-4px); border-color:rgba(34,211,238,.45); box-shadow:0 18px 50px rgba(0,0,0,.45)}
+  .mol-top{display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px}
+  .role{font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--lime)}
+  .charge{font-family:var(--mono); font-size:11px; color:var(--mut); border:1px solid var(--line); padding:3px 9px; border-radius:999px; background:rgba(255,255,255,.04)}
+  .mol-stage{background:radial-gradient(320px 170px at 50% 28%, rgba(34,211,238,.1), transparent), rgba(0,0,0,.35); border-radius:12px; border:1px solid var(--line); padding:6px; position:relative; overflow:hidden}
+  .mol-stage svg{width:100%; height:auto; display:block}
+  .mol-stage::after{content:""; position:absolute; inset:0; pointer-events:none; background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px); background-size:26px 26px; mask-image:radial-gradient(300px 200px at 50% 45%, black, transparent 80%)}
+  .mol-name{margin:14px 0 0; font-size:20px; letter-spacing:-.01em}
+  .mol-name span{display:block; font-size:12px; color:var(--mut); font-weight:500; margin-top:2px; font-style:italic}
+  .mol-story{margin:8px 0 0; color:#c3cde6; font-size:13.5px; line-height:1.6}
+  .mol-meta{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; align-items:center}
+  .formula{font-family:var(--mono); font-size:12px; color:var(--cyan); background:rgba(34,211,238,.1); display:inline-block; padding:4px 10px; border-radius:999px; border:1px solid rgba(34,211,238,.25)}
+  .mass{font-family:var(--mono); font-size:11.5px; color:var(--mut)}
+  .keystat{font-family:var(--mono); font-size:11.5px; color:var(--amber); background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.25); padding:4px 10px; border-radius:999px}
+  .mol-paths{display:flex; gap:6px; flex-wrap:wrap; margin-top:10px}
+  .pchip{font-size:11px; font-family:var(--mono); padding:4px 10px; border-radius:999px; background:rgba(255,255,255,.05); border:1px solid var(--line); color:var(--mut); cursor:pointer}
+  .pchip:hover{color:#fff; border-color:var(--cyan)}
+  .inspect{margin-top:auto; padding-top:12px; font-family:var(--mono); font-size:12px; color:var(--cyan)}
+  .mol-card:hover .inspect{color:#a5f3fc}
+  /* SVG chemistry shared */
+  .bl{stroke:#7d8aa8; stroke-width:2.4; stroke-linecap:round}
+  .bl-thick{stroke:#aeb9d2; stroke-width:3; stroke-linecap:round}
+  .hot{stroke:var(--lime); stroke-width:2.6; stroke-dasharray:7 5; animation:dashflow 1.1s linear infinite}
+  @keyframes dashflow{to{stroke-dashoffset:-12}}
+  .pulse-ring{fill:none; stroke:var(--lime); stroke-width:1.6; opacity:.85; animation:ping 1.8s ease-out infinite; transform-origin:center; transform-box:fill-box}
+  @keyframes ping{0%{transform:scale(.72); opacity:.95}70%{transform:scale(1.12); opacity:.25}100%{transform:scale(1.12); opacity:0}}
+  .alabel{font:700 11px var(--font); text-anchor:middle; dominant-baseline:central; pointer-events:none}
+  .slabel{font:600 9.5px var(--mono); fill:#8b98b8; text-anchor:middle}
+  .cap{font:600 10px var(--mono); fill:#93a0bd; text-anchor:middle}
+  .cap-hi{font:700 10px var(--mono); fill:#d9f99d; text-anchor:middle}
+  /* Dossier modal */
+  #dossier{position:fixed; inset:0; z-index:200; display:none; align-items:center; justify-content:center; padding:20px; background:rgba(2,5,12,.7); backdrop-filter:blur(8px)}
+  #dossier.open{display:flex}
+  .dossier-card{width:min(880px,100%); max-height:90vh; overflow:auto; padding:26px; position:relative}
+  .dossier-grid{display:grid; grid-template-columns:1.1fr .9fr; gap:18px; margin-top:14px}
+  @media(max-width:760px){.dossier-grid{grid-template-columns:1fr}}
+  .kv{display:grid; grid-template-columns:110px 1fr; gap:6px 12px; font-size:13px; margin-top:12px}
+  .kv dt{color:var(--mut); font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; padding-top:2px}
+  .kv dd{margin:0; line-height:1.55}
+  .dclose{position:absolute; top:14px; right:14px}
+  /* ETC flagship feature */
+  .etc-feature{display:grid; grid-template-columns:1.05fr .95fr; gap:26px; padding:34px; position:relative; overflow:hidden}
+  @media(max-width:900px){.etc-feature{grid-template-columns:1fr}}
+  .etc-feature::before{content:""; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(600px 300px at 80% 20%, rgba(190,242,100,.08), transparent 60%);}
+  .etc-copy h2{margin:8px 0 10px; font-size:clamp(28px,4.5vw,44px); letter-spacing:-.03em; line-height:1.05}
+  .etc-copy p{color:var(--mut); line-height:1.65; margin:0 0 14px}
+  .etc-list{list-style:none; margin:0 0 20px; padding:0; display:flex; flex-direction:column; gap:8px; font-size:14px; color:#c3cde6}
+  .etc-list li::before{content:"◉ "; color:var(--lime)}
+  .etc-list b{color:var(--txt)}
+  .etc-visual svg{width:100%; height:auto; display:block; background:rgba(0,0,0,.3); border:1px solid var(--line); border-radius:14px; padding:6px}
+  .etc-chips{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+  .etc-chips span{font-family:var(--mono); font-size:11px; color:var(--lime); background:rgba(190,242,100,.08); border:1px solid rgba(190,242,100,.3); padding:4px 12px; border-radius:999px}
+  .sec-more{font-size:12.5px; color:var(--mut)}
+  .sec-more b{color:var(--txt); font-weight:600}
+  /* CTA */
+  .cta{padding:48px 32px; text-align:center; position:relative; overflow:hidden}
+  .cta h2{font-size:clamp(28px,5vw,52px); margin:0; letter-spacing:-.03em}
+  /* FOOTER */
+  footer{width:min(1120px, calc(100% - 32px)); margin:30px auto 40px; color:var(--mut); font-size:13px; display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; border-top:1px solid var(--line); padding-top:18px}
+  .reveal{opacity:0; transform:translateY(18px); transition:.7s ease}
+  .reveal.visible{opacity:1; transform:none}
+  .toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:#0b1226; border:1px solid rgba(34,211,238,.4); padding:12px 18px; border-radius:12px;
+    opacity:0; transition:.3s; z-index:100; font-size:14px;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand">
+    <div class="logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#04070f" stroke-width="2.2" stroke-linecap="round"><path d="M7 3c0 5 10 5 10 9s-10 4-10 9"/><path d="M17 3c0 5-10 5-10 9s10 4 10 9"/><path d="M8 6h8M8 12h8M8 18h8"/></svg>
+    </div>
+    <div>CENTHESES<small>pathway emulator</small></div>
+  </div>
+  <div class="links">
+    <a href="./etc.html" style="color:var(--lime)">ETC·3D ⚡</a>
+    <a href="#lab">Live Lab</a>
+    <a href="#kinetics">Kinetics</a>
+    <a href="#molecules">Molecules</a>
+  </div>
+  <a class="btn primary" href="./etc.html">⚡ Enter the ETC in 3D</a>
+</nav>
+
+<header class="hero">
+  <canvas id="net"></canvas>
+  <div class="grid-overlay"></div>
+  <div class="orb" style="width:420px;height:420px;left:-100px;top:10%;background:rgba(34,211,238,.25)"></div>
+  <div class="orb" style="width:380px;height:380px;right:-80px;top:30%;background:rgba(167,139,250,.28);animation-delay:-3s"></div>
+  <div class="orb" style="width:300px;height:300px;left:40%;bottom:-100px;background:rgba(244,114,182,.2);animation-delay:-6s"></div>
+
+  <div class="hero-inner">
+    <div class="pill"><span class="dot"></span> flagship · 3D electron transport chain</div>
+    <h1>Emulate life's<br/><span class="grad">chemistry in motion.</span></h1>
+    <p class="sub">Start inside a <b>live 3D electron transport chain</b> — real PDB protein backbones, inch-by-inch electron routes, narrated cinematics. Then explore the companions below: <b>pathway lab, kinetics & molecules</b>. Watch <b id="typed">ATP…</b> roll off the chain in real time.</p>
+    <div class="cta-row">
+      <a class="btn primary" href="./etc.html">⚡ Enter the ETC in 3D</a>
+      <a class="btn" href="#lab">Browse the pathway lab ↓</a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat"><span>ATP synthesized</span><strong id="heroAtp">0</strong></div>
+      <div class="stat"><span>Reactions fired</span><strong id="heroRx">0</strong></div>
+      <div class="stat"><span>Residues traced in 3D</span><strong>21,993</strong></div>
+      <div class="stat"><span>Cofactors placed</span><strong id="heroEnz">43</strong></div>
+    </div>
+    <div class="scroll-hint">the ETC awaits below · scroll ↓</div>
+  </div>
+</header>
+
+<div class="marquee"><div id="marqueeInner">3D ELECTRON TRANSPORT — REAL PDB BACKBONES <b>◆</b> 21,993 RESIDUES LIVE <b>◆</b> GLYCOLYSIS <b>◆</b> CITRIC ACID CYCLE <b>◆</b> CALVIN CYCLE <b>◆</b> ΔG NEGATIVE = SPONTANEOUS <b>◆</b> ATP → ADP + Pi + ENERGY <b>◆</b> NADH → 2.5 ATP <b>◆</b> FADH2 → 1.5 ATP <b>◆</b>&nbsp;</div></div>
+
+<section class="block reveal" id="etc">
+  <div class="card etc-feature">
+    <div class="etc-copy">
+      <div class="kicker">Flagship — start here</div>
+      <h2>The electron transport chain,<br/>in atomic 3D.</h2>
+      <p>Five respiratory complexes traced from real PDB structures, simulating live in your browser. Follow electrons cofactor-by-cofactor, pump protons with your own hands, poison the chain with real inhibitors, and let the narrator walk you through all 32 beats — or fly free with WASD.</p>
+      <ul class="etc-list">
+        <li><b>21,993 residues</b> · 5XTD · 1ZOY · 1BGY · 1OCC · 6TT7</li>
+        <li><b>Live gradient sim</b> · 5 textbook inhibitors · Q-cycle bifurcation</li>
+        <li><b>Cinematics + voice</b> · textbook figures · chain minimap · mitochondrion zoom</li>
+      </ul>
+      <div class="cta-row" style="justify-content:flex-start">
+        <a class="btn primary" href="./etc.html">⚡ Launch the 3D ETC</a>
+        <a class="btn" href="#lab">2D pathway lab ↓</a>
+      </div>
+    </div>
+    <div class="etc-visual" aria-hidden="true">
+      <svg viewBox="0 0 420 240">
+        <line x1="10" y1="120" x2="410" y2="120" stroke="#b45309" stroke-width="3"/>
+        <line x1="10" y1="150" x2="410" y2="150" stroke="#b45309" stroke-width="3"/>
+        <text x="14" y="40" font-size="11" fill="#8b98b8" font-family="monospace">INTERMEMBRANE SPACE</text>
+        <text x="14" y="225" font-size="11" fill="#8b98b8" font-family="monospace">MATRIX</text>
+        <rect x="22" y="105" width="66" height="60" rx="9" fill="rgba(56,189,248,.18)" stroke="#38bdf8" stroke-width="2.5"/>
+        <rect x="100" y="112" width="44" height="46" rx="9" fill="rgba(167,139,250,.18)" stroke="#a78bfa" stroke-width="2.5"/>
+        <rect x="156" y="105" width="66" height="60" rx="9" fill="rgba(190,242,100,.14)" stroke="#bef264" stroke-width="2.5"/>
+        <rect x="234" y="105" width="58" height="60" rx="9" fill="rgba(244,114,182,.16)" stroke="#f472b6" stroke-width="2.5"/>
+        <rect x="304" y="105" width="76" height="60" rx="9" fill="rgba(251,191,36,.14)" stroke="#fbbf24" stroke-width="2.5"/>
+        <text x="55" y="140" font-size="15" text-anchor="middle" fill="#e8eefc" font-family="monospace">I</text>
+        <text x="122" y="140" font-size="15" text-anchor="middle" fill="#e8eefc" font-family="monospace">II</text>
+        <text x="189" y="140" font-size="15" text-anchor="middle" fill="#e8eefc" font-family="monospace">III</text>
+        <text x="263" y="140" font-size="15" text-anchor="middle" fill="#e8eefc" font-family="monospace">IV</text>
+        <text x="342" y="140" font-size="15" text-anchor="middle" fill="#e8eefc" font-family="monospace">V</text>
+        <line x1="88" y1="135" x2="100" y2="135" stroke="#22d3ee" stroke-width="3"/>
+        <line x1="222" y1="100" x2="234" y2="100" stroke="#22d3ee" stroke-width="3"/>
+        <circle cx="212" cy="100" r="5" fill="#22d3ee"/>
+        <line x1="60" y1="105" x2="60" y2="70" stroke="#f472b6" stroke-width="2.5"/>
+        <line x1="190" y1="105" x2="190" y2="70" stroke="#f472b6" stroke-width="2.5"/>
+        <line x1="262" y1="105" x2="262" y2="70" stroke="#f472b6" stroke-width="2.5"/>
+        <text x="300" y="66" font-size="11" fill="#f472b6" font-family="monospace">H⁺ ↑</text>
+        <text x="330" y="200" font-size="11" fill="#bef264" font-family="monospace">ATP ✦</text>
+      </svg>
+      <div class="etc-chips"><span>5 complexes</span><span>43 cofactors</span><span>32 cinematic beats</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="block reveal" id="lab">
+  <div class="sec-head">
+    <div><div class="kicker">02 — Pathway Lab · <span class="sec-more">the 2D companion</span></div><h2>Reactions on paper.</h2><p>Prefer the flat view? Step through <b>glycolysis, citric acid cycle & Calvin</b> reaction-by-reaction, and tweak <b>pH, temperature & substrate</b> to bend the flux — just like in vitro.</p></div>
+    <div style="font-family:var(--mono);font-size:12px;color:var(--mut)">flux: <span id="fluxLabel" style="color:var(--lime)">100%</span> · efficiency model: Q10 + pH gaussian</div>
+  </div>
+
+  <div class="lab">
+    <div class="card path-list" id="pathList"></div>
+
+    <div class="card reactor">
+      <div class="reactor-top">
+        <div><div id="pathTag" style="font-family:var(--mono);font-size:12px;color:var(--cyan);letter-spacing:.18em"></div>
+        <h3 id="pathName" style="margin:4px 0 0;font-size:24px;letter-spacing:-.02em"></h3>
+        <div id="pathDesc" style="color:var(--mut);font-size:13.5px;margin-top:4px"></div></div>
+        <div class="controls">
+          <button class="icon-btn" id="btnPlay" title="Play/Pause">⏸</button>
+          <button class="icon-btn" id="btnNext" title="Next step">⏭</button>
+          <button class="icon-btn" id="btnReset" title="Reset">↺</button>
+        </div>
+      </div>
+
+      <div class="slider-group">
+        <div><label>Speed <span id="speedVal">1.2s</span></label><input id="speed" type="range" min="200" max="2500" value="1200" /></div>
+        <div><label>Temperature <span id="tempVal">37°C</span></label><input id="temp" type="range" min="10" max="60" value="37" /></div>
+        <div><label>pH <span id="phVal">7.4</span></label><input id="ph" type="range" min="4" max="9" value="7.4" step="0.1" /></div>
+      </div>
+
+      <div class="reaction-stage">
+        <div class="enzyme-badge">◉ <span id="enzyme">Hexokinase</span></div>
+        <div class="mol-flow">
+          <div class="mol" id="molSub"><h4>Glucose</h4><span>C6H12O6</span></div>
+          <div class="arrow">→</div>
+          <div class="mol" id="molProd" style="border-color:rgba(190,242,100,.4)"><h4>Glucose-6-P</h4><span>+ ADP</span></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;color:var(--mut)"><span id="stepLabel">STEP 1 / 10</span><span id="dgLabel">ΔG −16.7 kJ/mol</span></div>
+        <div class="progress"><i id="prog"></i></div>
+        <div class="steps" id="steps"></div>
+      </div>
+    </div>
+
+    <div class="card side">
+      <div><div class="kicker">energetics</div>
+        <div class="energy-grid" style="margin-top:10px">
+          <div class="e-box"><span>ATP net</span><strong id="atpCount" style="color:var(--lime)">0</strong></div>
+          <div class="e-box"><span>NADH</span><strong id="nadhCount" style="color:var(--cyan)">0</strong></div>
+          <div class="e-box"><span>FADH2</span><strong id="fadhCount" style="color:var(--vio)">0</strong></div>
+          <div class="e-box"><span>GTP / CO2</span><strong id="co2Count" style="color:var(--amber)">0</strong></div>
+        </div>
+      </div>
+      <div><div class="kicker">mechanism</div><div class="detail" id="detail" style="margin-top:8px"></div></div>
+      <div><div class="kicker" style="margin-bottom:6px">ΔG driving force</div><div class="dg-bar"><i id="dgBar" style="width:60%"></i></div>
+      <div id="effNote" style="font-size:12px;color:var(--mut);margin-top:8px;font-family:var(--mono)"></div></div>
+      <button class="btn" id="btnCopy" style="justify-content:center">⧉ Copy reaction summary</button>
+    </div>
+  </div>
+</section>
+
+<section class="block reveal" id="kinetics">
+  <div class="sec-head">
+    <div><div class="kicker">03 — Enzyme kinetics playground</div><h2>Michaelis–Menten, alive.</h2><p>Drag substrate, Vmax and Km. The curve, the velocity particle, and the Pathway Lab flux all respond.</p></div>
+  </div>
+  <div class="kin-grid">
+    <div class="card kin-controls">
+      <div class="row"><label>Substrate [S] (mM) — <output id="sVal">2.5</output></label><input id="sSlider" type="range" min="0.1" max="10" step="0.1" value="2.5" style="width:100%"/></div>
+      <div class="row"><label>Vmax (µmol/min) — <output id="vmaxVal">100</output></label><input id="vmaxSlider" type="range" min="10" max="200" value="100" style="width:100%"/></div>
+      <div class="row"><label>Km (mM) — <output id="kmVal">1.5</output></label><input id="kmSlider" type="range" min="0.2" max="8" step="0.1" value="1.5" style="width:100%"/></div>
+      <div class="card" style="padding:14px;margin-top:14px;background:rgba(0,0,0,.3)">
+        <div style="font-family:var(--mono);font-size:13px">v₀ = Vmax·[S] / (Km+[S])</div>
+        <div style="font-size:28px;font-weight:800;margin-top:6px"><span id="v0">62.5</span> <span style="font-size:13px;color:var(--mut)">µmol/min</span></div>
+        <div id="kinState" style="font-size:12.5px;color:var(--lime);font-family:var(--mono);margin-top:4px">● near saturation</div>
+      </div>
+    </div>
+    <div class="card" style="padding:14px"><canvas id="mmCanvas"></canvas></div>
+  </div>
+</section>
+
+<section class="block reveal" id="molecules">
+  <div class="sec-head">
+    <div><div class="kicker">04 — Agents of life</div><h2>Six molecules that run you.</h2><p>Real connectivity, real functional groups, real jobs. Animated dots are electrons and energy flowing where the chemistry actually happens. Click any agent for its full dossier.</p></div>
+    <div class="legend"><span><i style="background:#e2e8f0"></i>C</span><span><i style="background:#f87171"></i>O</span><span><i style="background:#60a5fa"></i>N</span><span><i style="background:#fbbf24"></i>P</span><span><i style="background:#94a3b8"></i>H</span><span style="color:var(--lime)">┄ highlighted = the bond that matters</span></div>
+  </div>
+  <div class="mol-grid" id="molGrid"></div>
+</section>
+<div id="dossier"><div class="card dossier-card" id="dossierCard"></div></div>
+
+<section class="block reveal">
+  <div class="card cta">
+    <div class="kicker">open · interactive · extensible</div>
+    <h2>Fork it. Break it. <span style="background:linear-gradient(90deg,#22d3ee,#bef264);-webkit-background-clip:text;background-clip:text;color:transparent">Phosphorylate it.</span></h2>
+    <p style="color:var(--mut)">This intro is just the membrane. Full stochastic simulation, 3D protein viewer & SBML import are next.</p>
+    <div class="cta-row"><a class="btn primary" href="#lab" onclick="toast('Pathway engine already running ⚡')">⚡ Keep simulating</a><button class="btn" onclick="toast('SBML import + stochastic solver coming soon 🧬')">🧬 Roadmap</button></div>
+  </div>
+</section>
+
+<footer><span>© 2026 Centheses · biochemistry emulator · served on :8000</span><span style="font-family:var(--mono)">ΔG &lt; 0 → go · made with ATP</span></footer>
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------- DATA ----------
+const PATHWAYS = {
+  glycolysis: {
+    name:"Glycolysis", tag:"CYTOSOL · 10 STEPS · ANAEROBIC OK",
+    desc:"One glucose → two pyruvate. Net +2 ATP, +2 NADH. The universal sugar splitter.",
+    color:"#22d3ee",
+    steps:[
+      {s:"Glucose",p:"Glucose-6-phosphate",e:"Hexokinase",f:"C6H12O6",fp:"+ ADP",dg:-16.7,atp:-1,d:"Glucose trapped in the cell by phosphorylation. Costs 1 ATP.",eq:"Glucose + ATP → G6P + ADP"},
+      {s:"Glucose-6-P",p:"Fructose-6-P",e:"Phosphoglucose isomerase",f:"isomerization",fp:"",dg:1.7,d:"Aldose → ketose isomerization. Near equilibrium, freely reversible.",eq:"G6P ⇌ F6P"},
+      {s:"Fructose-6-P",p:"Fructose-1,6-bisP",e:"PFK-1 ★ rate-limiting",f:"+ ATP",fp:"+ ADP",dg:-14.2,atp:-1,d:"Committed step. Activated by AMP & fructose-2,6-BP, inhibited by ATP & citrate.",eq:"F6P + ATP → F1,6BP + ADP"},
+      {s:"Fructose-1,6-bisP",p:"DHAP + G3P",e:"Aldolase",f:"C6 split",fp:"2 × C3",dg:23.8,d:"Six-carbon sugar cleaved into two trioses. DHAP rapidly converts to G3P.",eq:"F1,6BP → DHAP + G3P"},
+      {s:"Glyceraldehyde-3-P",p:"1,3-Bisphosphoglycerate",e:"GAPDH",f:"+ NAD+ + Pi",fp:"+ NADH",dg:6.3,nadh:2,d:"Oxidation + phosphorylation. First energy-conserving step — makes NADH.",eq:"G3P + NAD+ + Pi → 1,3BPG + NADH (×2)"},
+      {s:"1,3-Bisphosphoglycerate",p:"3-Phosphoglycerate",e:"Phosphoglycerate kinase",f:"substrate-level",fp:"+ ATP ×2",dg:-18.5,atp:2,d:"First ATP payoff via substrate-level phosphorylation.",eq:"1,3BPG + ADP → 3PG + ATP (×2)"},
+      {s:"3-Phosphoglycerate",p:"2-Phosphoglycerate",e:"Phosphoglycerate mutase",f:"phosphate shift",fp:"",dg:4.4,d:"Phosphate moved from C3 → C2 to set up dehydration.",eq:"3PG ⇌ 2PG"},
+      {s:"2-Phosphoglycerate",p:"Phosphoenolpyruvate",e:"Enolase",f:"− H2O",fp:"",dg:7.5,d:"Dehydration creates a high-energy enol phosphate. Needs Mg²⁺.",eq:"2PG → PEP + H2O (×2)"},
+      {s:"Phosphoenolpyruvate",p:"Pyruvate",e:"Pyruvate kinase",f:"",fp:"+ ATP ×2",dg:-31.4,atp:2,d:"Second payoff. Big irreversible drop drives the whole pathway forward.",eq:"PEP + ADP → Pyruvate + ATP (×2)"},
+      {s:"Pyruvate (fate)",p:"Lactate or Acetyl-CoA",e:"LDH / PDH complex",f:"anaerobic vs aerobic",fp:"+ NAD+ or + NADH",dg:-25.1,d:"No O₂? → lactate (recycle NAD+). O₂ present? → acetyl-CoA into mitochondria.",eq:"Pyruvate → Lactate | Acetyl-CoA + CO2 + NADH"},
+    ]
+  },
+  tca: {
+    name:"Citric Acid Cycle", tag:"MITOCHONDRIAL MATRIX · 8 STEPS · AEROBIC",
+    desc:"Acetyl-CoA oxidized to 2 CO₂. Per turn: 3 NADH, 1 FADH₂, 1 GTP. Spins twice per glucose.",
+    color:"#a78bfa",
+    steps:[
+      {s:"Acetyl-CoA + Oxaloacetate",p:"Citrate",e:"Citrate synthase",f:"C2 + C4",fp:"C6",dg:-32.2,d:"Condensation starts the wheel. Inhibited by ATP & NADH.",eq:"Acetyl-CoA + OAA → Citrate + CoA"},
+      {s:"Citrate",p:"Isocitrate",e:"Aconitase",f:"via cis-aconitate",fp:"",dg:13.3,d:"Dehydration then rehydration. Fe–S cluster enzyme, sensitive to oxidative stress.",eq:"Citrate ⇌ Isocitrate"},
+      {s:"Isocitrate",p:"α-Ketoglutarate",e:"Isocitrate dehydrogenase ★",f:"− CO2",fp:"+ NADH",dg:-20.9,nadh:1,co2:1,d:"First decarboxylation. Rate-limiting, activated by ADP & Ca²⁺.",eq:"Isocitrate + NAD+ → αKG + CO2 + NADH"},
+      {s:"α-Ketoglutarate",p:"Succinyl-CoA",e:"α-KGDH complex",f:"− CO2",fp:"+ NADH",dg:-33.5,nadh:1,co2:1,d:"Second decarboxylation. Huge complex like PDH, inhibited by succinyl-CoA.",eq:"αKG + NAD+ + CoA → Succinyl-CoA + CO2 + NADH"},
+      {s:"Succinyl-CoA",p:"Succinate",e:"Succinyl-CoA synthetase",f:"",fp:"+ GTP",dg:-2.9,gtp:1,d:"Only substrate-level phosphorylation in the cycle. GTP ≈ ATP.",eq:"Succinyl-CoA + GDP → Succinate + GTP"},
+      {s:"Succinate",p:"Fumarate",e:"Succinate dehydrogenase (CII)",f:"",fp:"+ FADH2",dg:0,fadh:1,d:"Directly feeds electrons into the respiratory chain — Complex II itself.",eq:"Succinate + FAD → Fumarate + FADH2"},
+      {s:"Fumarate",p:"Malate",e:"Fumarase",f:"+ H2O",fp:"",dg:-3.8,d:"Hydration of the double bond. Stereospecific for L-malate.",eq:"Fumarate + H2O → Malate"},
+      {s:"Malate",p:"Oxaloacetate",e:"Malate dehydrogenase",f:"",fp:"+ NADH",dg:29.7,nadh:1,d:"Regenerates oxaloacetate. Endergonic alone — pulled forward by citrate synthase.",eq:"Malate + NAD+ → OAA + NADH"},
+    ]
+  },
+  etc: {
+    name:"Electron Transport Chain", tag:"INNER MEMBRANE · O₂ REQUIRED · ~30 ATP",
+    desc:"NADH & FADH₂ drop electrons down 4 complexes. Pumping protons powers ATP synthase.",
+    color:"#bef264",
+    steps:[
+      {s:"NADH",p:"Ubiquinone (QH2)",e:"Complex I — NADH dehydrogenase",f:"pumps 4 H+",fp:"",dg:-69,d:"Electrons from NADH pump 4 protons. Rotenone blocks here.",eq:"NADH + Q → NAD+ + QH2 + 4H⁺ out"},
+      {s:"Succinate / FADH2",p:"Ubiquinone (QH2)",e:"Complex II — Succinate DH",f:"no pumping",fp:"",dg:-10,d:"FADH₂ enters with no proton pumping — yields ~1.5 ATP vs 2.5 for NADH.",eq:"FADH2 + Q → FAD + QH2",fadh:0},
+      {s:"Ubiquinol (QH2)",p:"Cytochrome c (red.)",e:"Complex III — bc1 complex",f:"pumps 4 H+",fp:"Q-cycle",dg:-35,d:"Q-cycle doubles protons pumped. Antimycin A blocks here.",eq:"QH2 + 2 Cytc_ox → Q + 2 Cytc_red + 4H⁺"},
+      {s:"Cytochrome c (red.)",p:"H2O",e:"Complex IV — Cytochrome oxidase",f:"pumps 2 H+",fp:"+ ½O2",dg:-110,co2:0,d:"O₂ is the final electron acceptor → water. Cyanide kills here.",eq:"4 Cytc_red + O2 + 8H⁺ → 4 Cytc_ox + 2H2O"},
+      {s:"ADP + Pi + gradient",p:"ATP",e:"Complex V — ATP synthase ★",f:"~4 H+ per ATP",fp:"+ ATP ×2.5/NADH",dg:30.5,atp:2.5,d:"Rotary motor! Protons flow back, γ-shaft spins, 3 ATP per turn. Oligomycin jams it.",eq:"ADP + Pi + 4H⁺out → ATP + 4H⁺in"},
+    ]
+  },
+  calvin: {
+    name:"Calvin Cycle", tag:"CHLOROPLAST STROMA · LIGHT-INDEPENDENT",
+    desc:"CO₂ fixed into sugar using ATP + NADPH from light reactions. 3 turns → 1 G3P exit.",
+    color:"#f472b6",
+    steps:[
+      {s:"Ribulose-1,5-bisP + CO2",p:"2 × 3-Phosphoglycerate",e:"RuBisCO ★ most abundant enzyme",f:"carboxylation",fp:"",dg:-35,co2:-1,d:"Carbon fixation! RuBisCO grabs CO₂. Slow & sometimes grabs O₂ (photorespiration).",eq:"RuBP + CO2 → 2 × 3PG"},
+      {s:"3-Phosphoglycerate",p:"Glyceraldehyde-3-P",e:"Kinase + GAPDH (NADPH)",f:"costs ATP+NADPH",fp:"",dg:18,atp:-1,d:"Reduction phase — the light reactions pay with ATP and NADPH.",eq:"3PG + ATP + NADPH → G3P + ADP + NADP+"},
+      {s:"G3P (×5 of 6)",p:"Ribulose-1,5-bisP (regen.)",e:"Aldolase + Transketolase",f:"costs 1 ATP",fp:"1 G3P exits",dg:5,atp:-1,d:"Five of six G3P rebuild RuBP; every 3rd CO₂ nets one G3P toward glucose.",eq:"5 G3P + ATP → 3 RuBP + ADP"},
+    ]
+  }
+};
+
+const PATH_LABEL={glycolysis:"Glycolysis",tca:"Citric acid",etc:"ETC",calvin:"Calvin"};
+const METABOLITES = [
+ {id:"atp",name:"ATP",sub:"adenosine triphosphate",role:"Energy coin",formula:"C₁₀H₁₆N₅O₁₃P₃",mass:"507.18 g/mol",charge:"−4 · pH 7",
+  story:"The coin every enzyme accepts. It rips off its γ-phosphate to pay for work — muscle, nerves, synthesis — then gets recharged by the mitochondria.",
+  key:"−30.5 kJ/mol hydrolysis",paths:["glycolysis","etc"],target:"etc",
+  madeIn:"Substrate-level phosphorylation (glycolysis, citric-acid-cycle GTP) · oxidative phosphorylation",usedIn:"Muscle contraction · ion pumps · biosynthesis · kinases",
+  bond:"Phosphoanhydride P–O–P (β–γ)",fact:"Your body turns over roughly its own weight in ATP every day — each molecule recycled ~1,000×.",
+  svg:`<svg viewBox="0 0 400 230" role="img" aria-label="ATP structure: adenine, ribose, triphosphate"><title>Adenine + ribose + triphosphate; gamma phosphate is hydrolyzed</title>
+   <polygon points="110,112 94,139.7 62,139.7 46,112 62,84.3 94,84.3" fill="rgba(96,165,250,.08)" stroke="#60a5fa" stroke-width="2.4"/>
+   <polygon points="94,84.3 124,94 132,112 124,130 94,139.7" fill="rgba(96,165,250,.08)" stroke="#60a5fa" stroke-width="2.4"/>
+   <circle cx="62" cy="84.3" r="10" fill="#60a5fa"/><text x="62" y="84.8" class="alabel" fill="#04070f">N</text>
+   <circle cx="46" cy="112" r="10" fill="#60a5fa"/><text x="46" y="112.5" class="alabel" fill="#04070f">N</text>
+   <circle cx="124" cy="94" r="10" fill="#60a5fa"/><text x="124" y="94.5" class="alabel" fill="#04070f">N</text>
+   <line x1="62" y1="139.7" x2="62" y2="162" class="bl"/><text x="62" y="176" class="slabel" fill="#60a5fa">NH₂</text>
+   <text x="86" y="206" class="cap">Adenine</text>
+   <line x1="118" y1="140" x2="168" y2="134" class="bl"/>
+   <polygon points="196,89 219,106 210,133 182,133 173,106" fill="rgba(34,211,238,.07)" stroke="#22d3ee" stroke-width="2.4"/>
+   <circle cx="196" cy="89" r="10" fill="#f87171"/><text x="196" y="89.5" class="alabel" fill="#04070f">O</text>
+   <circle cx="173" cy="106" r="8" fill="#e2e8f0"/><text x="173" y="106.5" font-size="8" class="alabel" fill="#04070f">C1′</text>
+   <circle cx="182" cy="133" r="8" fill="#e2e8f0"/><text x="182" y="133.5" font-size="8" class="alabel" fill="#04070f">C2′</text>
+   <circle cx="210" cy="133" r="8" fill="#e2e8f0"/><text x="210" y="133.5" font-size="8" class="alabel" fill="#04070f">C3′</text>
+   <text x="196" y="188" class="cap">Ribose</text>
+   <line x1="203" y1="141" x2="222" y2="143" class="bl"/>
+   <circle cx="228" cy="143" r="5.5" fill="#f87171"/>
+   <circle cx="248" cy="143" r="12" fill="#fbbf24"/><text x="248" y="143.5" class="alabel" fill="#04070f">P</text><text x="248" y="162" class="slabel">α</text>
+   <circle cx="268" cy="143" r="5.5" fill="#f87171"/>
+   <circle cx="288" cy="143" r="12" fill="#fbbf24"/><text x="288" y="143.5" class="alabel" fill="#04070f">P</text><text x="288" y="162" class="slabel">β</text>
+   <line x1="298" y1="135" x2="314" y2="124" class="bl"/>
+   <circle cx="320" cy="121" r="5" fill="#f87171"/>
+   <circle cx="338" cy="110" r="13" fill="#fbbf24"/><text x="338" y="110.5" class="alabel" fill="#04070f">P</text>
+   <circle cx="338" cy="110" r="20" class="pulse-ring"/>
+   <text x="338" y="88" class="slabel" fill="#bef264">γ</text>
+   <text x="290" y="210" class="cap-hi">γ–P hydrolyzed · −30.5 kJ/mol</text>
+   <circle r="4" fill="#bef264"><animateMotion dur="2s" repeatCount="indefinite" path="M248,143 L288,143 L338,110"/></circle>
+  </svg>`},
+ {id:"glucose",name:"Glucose",sub:"β-D-glucopyranose",role:"Universal fuel",formula:"C₆H₁₂O₆",mass:"180.16 g/mol",charge:"0 · neutral",
+  story:"The six-carbon sugar every pathway starts from. A locked box of ~2870 kJ/mol — glycolysis picks the lock, mitochondria empty the safe.",
+  key:"C1 anomeric · C6 phosphorylated",paths:["glycolysis","calvin"],target:"glycolysis",
+  madeIn:"Photosynthesis (Calvin) · diet · glycogen breakdown",usedIn:"Hexokinase → glycolysis → everything downstream",
+  bond:"Hemiacetal ring C1–O · C6–OH phosphorylated",fact:"Your brain alone burns ~120 g of glucose a day — it cannot fast on fat.",
+  svg:`<svg viewBox="0 0 400 230" role="img" aria-label="Glucose Haworth projection: six-membered pyranose ring"><title>Pyranose ring: five carbons plus one oxygen; anomeric C1, CH2OH on C5</title>
+   <polygon points="258,112 229,162 171,162 142,112 171,62 229,62" fill="rgba(226,232,240,.05)" stroke="#aeb9d2" stroke-width="3" stroke-linejoin="round"/>
+   <circle cx="258" cy="112" r="11" fill="#f87171"/><text x="258" y="112.5" class="alabel" fill="#04070f">O</text>
+   <circle cx="229" cy="162" r="10" fill="#e2e8f0"/><text x="229" y="162.5" font-size="9" class="alabel" fill="#04070f">C1</text>
+   <circle cx="171" cy="162" r="10" fill="#e2e8f0"/><text x="171" y="162.5" font-size="9" class="alabel" fill="#04070f">C2</text>
+   <circle cx="142" cy="112" r="10" fill="#e2e8f0"/><text x="142" y="112.5" font-size="9" class="alabel" fill="#04070f">C3</text>
+   <circle cx="171" cy="62" r="10" fill="#e2e8f0"/><text x="171" y="62.5" font-size="9" class="alabel" fill="#04070f">C4</text>
+   <circle cx="229" cy="62" r="10" fill="#e2e8f0"/><text x="229" y="62.5" font-size="9" class="alabel" fill="#04070f">C5</text>
+   <line x1="229" y1="172" x2="229" y2="190" class="hot"/><text x="229" y="203" class="cap-hi">C1–OH anomeric</text>
+   <line x1="171" y1="172" x2="171" y2="188" class="bl"/><text x="150" y="201" class="slabel">OH</text>
+   <line x1="132" y1="112" x2="112" y2="112" class="bl"/><text x="98" y="115" class="slabel">OH</text>
+   <line x1="171" y1="52" x2="171" y2="36" class="bl"/><text x="171" y="28" class="slabel">OH</text>
+   <line x1="237" y1="53" x2="254" y2="36" class="bl"/><text x="282" y="32" class="slabel" fill="#fbbf24">CH₂OH (C6)</text>
+   <text x="200" y="218" class="cap">pyranose ring · hexokinase phosphorylates C6–OH</text>
+  </svg>`},
+ {id:"nadh",name:"NADH",sub:"reduced nicotinamide adenine dinucleotide",role:"Electron courier",formula:"C₂₁H₂₉N₇O₁₄P₂",mass:"665.43 g/mol",charge:"−2 · pH 7",
+  story:"Picks up a hydride (H⁻) in glycolysis and the citric acid cycle, drops it at Complex I. Each delivery pays out ~2.5 ATP.",
+  key:"E°′ −320 mV · C4 hydride",paths:["glycolysis","tca","etc"],target:"etc",
+  madeIn:"GAPDH · pyruvate dehydrogenase · isocitrate DH · α-KGDH · malate DH",usedIn:"Complex I (NADH dehydrogenase) · biosynthesis (NADPH cousin)",
+  bond:"C4–H hydride on nicotinamide",fact:"The NAD⁺/NADH ratio (~700:1 in cytosol) sets which way metabolism flows.",
+  svg:`<svg viewBox="0 0 400 230" role="img" aria-label="NADH: reduced nicotinamide on the left, adenine anchor on the right, diphosphate bridge"><title>Left ring carries the hydride at C4; diphosphate bridge links two nucleosides</title>
+   <rect x="28" y="66" width="100" height="92" rx="12" fill="rgba(190,242,100,.05)" stroke="rgba(190,242,100,.4)" stroke-dasharray="5 4"/>
+   <text x="78" y="78" class="slabel" fill="#bef264">redox half · reduced</text>
+   <polygon points="102,112 87,138 57,138 42,112 57,86 87,86" fill="rgba(190,242,100,.06)" stroke="#bef264" stroke-width="2.4"/>
+   <circle cx="57" cy="86" r="10" fill="#60a5fa"/><text x="57" y="86.5" class="alabel" fill="#04070f">N</text>
+   <circle cx="102" cy="112" r="11" fill="#e2e8f0"/><text x="102" y="112.5" font-size="9" class="alabel" fill="#04070f">C4</text>
+   <rect x="88" y="52" width="52" height="18" rx="9" fill="rgba(190,242,100,.15)" stroke="#bef264"/><text x="114" y="64" font-size="10" font-family="monospace" fill="#d9f99d" text-anchor="middle">extra H⁻</text>
+   <line x1="108" y1="70" x2="104" y2="100" class="bl"/>
+   <polygon points="150,124 164,132 160,148 142,148 138,132" fill="rgba(34,211,238,.07)" stroke="#22d3ee" stroke-width="2"/><circle cx="150" cy="124" r="6" fill="#f87171"/>
+   <line x1="128" y1="132" x2="138" y2="136" class="bl"/>
+   <circle cx="190" cy="140" r="11" fill="#fbbf24"/><text x="190" y="140.5" class="alabel" fill="#04070f">P</text>
+   <circle cx="210" cy="140" r="5.5" fill="#f87171"/>
+   <circle cx="230" cy="140" r="11" fill="#fbbf24"/><text x="230" y="140.5" class="alabel" fill="#04070f">P</text>
+   <text x="210" y="162" class="slabel">diphosphate bridge</text>
+   <polygon points="262,124 276,132 272,148 254,148 250,132" fill="rgba(34,211,238,.07)" stroke="#22d3ee" stroke-width="2"/><circle cx="262" cy="124" r="6" fill="#f87171"/>
+   <polygon points="352,100 336,122 344,146 368,146 376,122" fill="rgba(167,139,250,.08)" stroke="#a78bfa" stroke-width="2.2"/>
+   <polygon points="376,122 392,130 386,150 368,146" fill="rgba(167,139,250,.08)" stroke="#a78bfa" stroke-width="2.2"/>
+   <circle cx="344" cy="103" r="8" fill="#60a5fa"/><text x="344" y="103.5" font-size="9" class="alabel" fill="#04070f">N</text>
+   <text x="356" y="170" class="slabel">adenine anchor</text>
+   <text x="200" y="200" class="cap">hydride rides C4 → dropped at Complex I (≈2.5 ATP)</text>
+   <circle r="4" fill="#bef264"><animateMotion dur="2.4s" repeatCount="indefinite" path="M102,112 C140,128 160,136 190,140"/></circle>
+  </svg>`},
+ {id:"pyruvate",name:"Pyruvate",sub:"pyruvate · CH₃–CO–COO⁻",role:"The crossroads",formula:"C₃H₄O₃ → C₃H₃O₃⁻",mass:"87.05 g/mol (anion)",charge:"−1 · pH 7",
+  story:"Where glycolysis ends and fate begins. No oxygen → lactate. Oxygen → acetyl-CoA into the citric acid furnace.",
+  key:"PDH cuts C1–C2",paths:["glycolysis","tca"],target:"tca",
+  madeIn:"Pyruvate kinase (glycolysis payoff step)",usedIn:"Lactate DH · PDH complex · pyruvate carboxylase",
+  bond:"C1–C2 cleaved by PDH → CO₂ + acetyl-CoA",fact:"Three carbons, three destinies: lactate, acetyl-CoA, or oxaloacetate.",
+  svg:`<svg viewBox="0 0 400 230" role="img" aria-label="Pyruvate: three-carbon chain, keto group in the middle, carboxylate on the right"><title>CH3 – C(=O) – COO-minus; PDH cleaves between C1 and C2</title>
+   <line x1="103" y1="115" x2="167" y2="115" class="bl-thick"/>
+   <line x1="193" y1="115" x2="257" y2="115" class="hot"/>
+   <circle cx="90" cy="115" r="13" fill="#e2e8f0"/><text x="90" y="115.5" class="alabel" fill="#04070f">C</text>
+   <text x="90" y="88" class="slabel">CH₃</text>
+   <line x1="78" y1="103" x2="68" y2="95" class="bl"/><text x="60" y="92" font-size="9" fill="#94a3b8" font-family="monospace">H</text>
+   <line x1="78" y1="127" x2="68" y2="135" class="bl"/><text x="60" y="142" font-size="9" fill="#94a3b8" font-family="monospace">H</text>
+   <circle cx="180" cy="115" r="13" fill="#e2e8f0"/><text x="180" y="115.5" class="alabel" fill="#04070f">C</text>
+   <line x1="175" y1="102" x2="175" y2="80" class="bl"/><line x1="185" y1="102" x2="185" y2="80" class="bl"/>
+   <circle cx="180" cy="68" r="12" fill="#f87171"/><text x="180" y="68.5" class="alabel" fill="#04070f">O</text>
+   <text x="214" y="72" class="slabel">keto C=O</text>
+   <circle cx="270" cy="115" r="13" fill="#e2e8f0"/><text x="270" y="115.5" class="alabel" fill="#04070f">C</text>
+   <line x1="280" y1="106" x2="298" y2="92" class="bl"/><line x1="284" y1="112" x2="302" y2="98" class="bl"/>
+   <circle cx="308" cy="84" r="12" fill="#f87171"/><text x="308" y="84.5" class="alabel" fill="#04070f">O</text>
+   <line x1="280" y1="124" x2="298" y2="138" class="bl"/>
+   <circle cx="308" cy="146" r="12" fill="#f87171"/><text x="308" y="146.5" font-size="10" class="alabel" fill="#04070f">O⁻</text>
+   <text x="336" y="60" class="slabel">carboxylate</text><text x="336" y="72" class="slabel">−1 at pH 7</text>
+   <text x="200" y="200" class="cap-hi">PDH cuts C1–C2 → CO₂ + acetyl-CoA</text>
+  </svg>`},
+ {id:"citrate",name:"Citrate",sub:"citrate³⁻ · first wheel of the citric acid cycle",role:"Cycle primer + signal",formula:"C₆H₈O₇ → C₆H₅O₇³⁻",mass:"189.11 g/mol (anion)",charge:"−3 · pH 7",
+  story:"First wheel of the citric acid cycle — and a messenger. High citrate tells PFK-1 'we're full, slow glycolysis down'.",
+  key:"inhibits PFK-1",paths:["tca","glycolysis"],target:"tca",
+  madeIn:"Citrate synthase (acetyl-CoA + oxaloacetate)",usedIn:"Aconitase → isocitrate · exported for fatty-acid synthesis",
+  bond:"3 × carboxylate COO⁻",fact:"Citrate shipped out of mitochondria becomes the carbon of new fat.",
+  svg:`<svg viewBox="0 0 400 230" role="img" aria-label="Citrate: central carbon with hydroxyl and three carboxylate arms"><title>Central C with OH plus three COO-minus arms; charge minus 3</title>
+   <circle cx="200" cy="122" r="12" fill="#e2e8f0"/><text x="200" y="122.5" class="alabel" fill="#04070f">C</text>
+   <line x1="200" y1="110" x2="200" y2="94" class="bl"/><text x="200" y="82" class="slabel" fill="#f87171">OH</text>
+   <line x1="191" y1="115" x2="158" y2="96" class="bl"/><circle cx="150" cy="91" r="9" fill="#e2e8f0"/><text x="150" y="91.5" font-size="8" class="alabel" fill="#04070f">CH₂</text>
+   <line x1="142" y1="84" x2="120" y2="70" class="bl"/><circle cx="112" cy="64" r="10" fill="#e2e8f0"/><text x="112" y="64.5" font-size="8" class="alabel" fill="#04070f">C</text>
+   <line x1="104" y1="58" x2="88" y2="50" class="bl"/><line x1="106" y1="64" x2="90" y2="58" class="bl"/><circle cx="78" cy="46" r="10" fill="#f87171"/><text x="78" y="46.5" font-size="9" class="alabel" fill="#04070f">O⁻</text>
+   <line x1="112" y1="54" x2="112" y2="38" class="bl"/><circle cx="112" cy="28" r="10" fill="#f87171"/><text x="112" y="28.5" class="alabel" fill="#04070f">O</text>
+   <line x1="209" y1="115" x2="242" y2="96" class="bl"/><circle cx="250" cy="91" r="9" fill="#e2e8f0"/><text x="250" y="91.5" font-size="8" class="alabel" fill="#04070f">CH₂</text>
+   <line x1="258" y1="84" x2="280" y2="70" class="bl"/><circle cx="288" cy="64" r="10" fill="#e2e8f0"/><text x="288" y="64.5" font-size="8" class="alabel" fill="#04070f">C</text>
+   <line x1="296" y1="58" x2="312" y2="50" class="bl"/><line x1="294" y1="64" x2="310" y2="58" class="bl"/><circle cx="322" cy="46" r="10" fill="#f87171"/><text x="322" y="46.5" font-size="9" class="alabel" fill="#04070f">O⁻</text>
+   <line x1="288" y1="54" x2="288" y2="38" class="bl"/><circle cx="288" cy="28" r="10" fill="#f87171"/><text x="288" y="28.5" class="alabel" fill="#04070f">O</text>
+   <line x1="200" y1="134" x2="200" y2="154" class="bl"/><circle cx="200" cy="164" r="10" fill="#e2e8f0"/><text x="200" y="164.5" font-size="8" class="alabel" fill="#04070f">C</text>
+   <line x1="192" y1="170" x2="178" y2="182" class="bl"/><circle cx="170" cy="188" r="10" fill="#f87171"/><text x="170" y="188.5" font-size="9" class="alabel" fill="#04070f">O⁻</text>
+   <line x1="208" y1="170" x2="222" y2="182" class="bl"/><circle cx="230" cy="188" r="10" fill="#f87171"/><text x="230" y="188.5" class="alabel" fill="#04070f">O</text>
+   <text x="200" y="214" class="cap-hi">3 × COO⁻ → charge −3 · feedback-inhibits PFK-1</text>
+  </svg>`},
+ {id:"o2h2o",name:"O₂ → H₂O",sub:"terminal acceptor · Complex IV",role:"Final acceptor",formula:"O₂ (32.00) → H₂O (18.02)",mass:"4 e⁻ + 4 H⁺ per O₂",charge:"redox span +1.13 V",
+  story:"The drain the whole chain flows toward. Cytochrome oxidase hands electrons to O₂ to make water — no O₂, no gradient, no ATP.",
+  key:"+815 mV · 4e⁻ reduction",paths:["etc"],target:"etc",
+  madeIn:"O₂ from photosynthesis (oxygenic); H⁺ from the matrix",usedIn:"Cytochrome c oxidase (Complex IV) → water",
+  bond:"O=O double bond → 2 × H–O–H",fact:"Cyanide and CO kill by blocking this one handoff — the chain backs up instantly.",
+  svg:`<svg viewBox="0 0 400 230" role="img" aria-label="O2 reduced to water: double-bonded oxygens, electrons flow through Complex IV into bent water"><title>O2 plus 4 electrons plus 4 protons yields 2 waters; H2O angle 104.5 degrees</title>
+   <circle cx="86" cy="98" r="13" fill="#f87171"/><text x="86" y="98.5" class="alabel" fill="#04070f">O</text>
+   <circle cx="86" cy="142" r="13" fill="#f87171"/><text x="86" y="142.5" class="alabel" fill="#04070f">O</text>
+   <line x1="80" y1="111" x2="80" y2="129" class="bl-thick"/><line x1="92" y1="111" x2="92" y2="129" class="bl-thick"/>
+   <circle cx="62" cy="88" r="2.4" fill="#fca5a5"/><circle cx="70" cy="82" r="2.4" fill="#fca5a5"/><circle cx="62" cy="152" r="2.4" fill="#fca5a5"/><circle cx="70" cy="158" r="2.4" fill="#fca5a5"/>
+   <text x="86" y="182" class="cap">O₂ · held by Complex IV</text>
+   <line x1="130" y1="120" x2="212" y2="120" class="bl"/>
+   <text x="171" y="102" class="slabel" fill="#a5f3fc">Complex IV</text>
+   <text x="171" y="142" class="slabel">4 e⁻ + 4 H⁺</text>
+   <circle r="3.6" fill="#22d3ee"><animateMotion dur="1.4s" repeatCount="indefinite" path="M130,120 L212,120"/></circle>
+   <circle r="3.6" fill="#22d3ee"><animateMotion dur="1.4s" begin="0.45s" repeatCount="indefinite" path="M130,120 L212,120"/></circle>
+   <circle r="3.6" fill="#22d3ee"><animateMotion dur="1.4s" begin="0.9s" repeatCount="indefinite" path="M130,120 L212,120"/></circle>
+   <line x1="300" y1="120" x2="328" y2="84" class="bl-thick"/><line x1="300" y1="120" x2="328" y2="156" class="bl-thick"/>
+   <circle cx="300" cy="120" r="14" fill="#f87171"/><text x="300" y="120.5" class="alabel" fill="#04070f">O</text>
+   <circle cx="334" cy="78" r="10" fill="#cbd5e1"/><text x="334" y="78.5" font-size="10" class="alabel" fill="#04070f">H</text>
+   <circle cx="334" cy="162" r="10" fill="#cbd5e1"/><text x="334" y="162.5" font-size="10" class="alabel" fill="#04070f">H</text>
+   <circle cx="282" cy="106" r="2.4" fill="#fca5a5"/><circle cx="282" cy="114" r="2.4" fill="#fca5a5"/><circle cx="282" cy="126" r="2.4" fill="#fca5a5"/><circle cx="282" cy="134" r="2.4" fill="#fca5a5"/>
+   <path d="M 314 108 A 24 24 0 0 0 314 132" fill="none" stroke="#8b98b8" stroke-width="1.4"/>
+   <text x="322" y="123" font-size="10" font-family="monospace" fill="#8b98b8">104.5°</text>
+   <text x="300" y="200" class="cap">2 H₂O · the chain's drain</text>
+  </svg>`},
+];
+
+// ---------- STATE ----------
+let curPath="glycolysis", idx=0, playing=true, timer=null;
+let totals={atp:0,nadh:0,fadh:0,co2:0,rx:0};
+let heroAtp=0;
+
+// ---------- HELPERS ----------
+const $=id=>document.getElementById(id);
+function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),2200)}
+function effFactor(){
+  const T=parseFloat($("temp").value), pH=parseFloat($("ph").value);
+  const q10=Math.pow(2,(T-37)/10); // Q10=2
+  const denature=T>45?Math.max(.1,1-(T-45)/15):1;
+  const cold=T<20?.4+.6*(T-10)/10:1;
+  const phF=Math.exp(-Math.pow(pH-7.4,2)/(2*0.9));
+  const mm=mmVelocity();
+  const mmF=mm.v0/100;
+  return Math.max(.02,Math.min(2.2,q10*denature*cold*(0.35+0.65*phF)*(0.3+0.7*mmF)));
+}
+function mmVelocity(){
+  const S=parseFloat($("sSlider").value),V=parseFloat($("vmaxSlider").value),K=parseFloat($("kmSlider").value);
+  const v0=V*S/(K+S); return {S,V,K,v0};
+}
+
+// ---------- PATH LAB ----------
+function renderPathList(){
+  $("pathList").innerHTML=Object.entries(PATHWAYS).map(([k,p])=>
+    `<button class="path-btn ${k===curPath?'active':''}" onclick="selectPath('${k}')"><span class="tag" style="color:${p.color}">${p.tag}</span><br/><b>${p.name}</b><small>${p.desc}</small></button>`
+  ).join("");
+}
+function selectPath(k){curPath=k;idx=0;renderPathList();renderStep(true);toast(PATHWAYS[k].name+" loaded 🧪")}
+function currentStep(){return PATHWAYS[curPath].steps[idx]}
+function updateFlux(){
+  const f=effFactor();
+  $("fluxLabel").textContent=Math.round(f*100)+"%";
+  $("effNote").textContent=`T ${$("temp").value}°C · pH ${$("ph").value} · flux ×${f.toFixed(2)}`;
+}
+function renderStep(reset){
+  const P=PATHWAYS[curPath], st=currentStep();
+  $("pathTag").textContent=P.tag; $("pathTag").style.color=P.color;
+  $("pathName").textContent=P.name; $("pathDesc").textContent=P.desc;
+  $("enzyme").textContent=st.e;
+  $("molSub").innerHTML=`<h4>${st.s}</h4><span>${st.f||""}</span>`;
+  $("molProd").innerHTML=`<h4>${st.p}</h4><span>${st.fp||""}</span>`;
+  $("stepLabel").textContent=`STEP ${idx+1} / ${P.steps.length} · ${st.e.split("★")[0].trim().toUpperCase()}`;
+  $("dgLabel").textContent=`ΔG ${st.dg>0?"+":""}${st.dg} kJ/mol ${st.dg<0?"· spontaneous":"· needs push"}`;
+  $("dgBar").style.width=Math.min(100,Math.abs(st.dg)/1.2+18)+"%";
+  $("detail").innerHTML=`${st.d}<br/><br/><code>${st.eq}</code>`;
+  $("prog").style.width=((idx+1)/P.steps.length*100)+"%";
+  $("steps").innerHTML=P.steps.map((s,i)=>
+    `<div class="step-row ${i===idx?'active':''} ${i<idx?'done':''}" onclick="jumpTo(${i})"><div class="step-num">${i<idx?'✓':i+1}</div><div><b>${s.s} → ${s.p}</b><br/><span style="color:var(--mut)">${s.e} · ΔG ${s.dg}</span></div></div>`
+  ).join("");
+  // Scroll the steps *container* only — never the page.
+  // scrollIntoView() bubbles to all ancestors (including document),
+  // which fought the user's scroll on every autoplay tick.
+  const box=$("steps"), active=box.querySelector(".active");
+  if(active){
+    const cTop=box.scrollTop, cH=box.clientHeight;
+    const aTop=active.offsetTop, aH=active.offsetHeight;
+    if(aTop<cTop||aTop+aH>cTop+cH){
+      box.scrollTo({top:aTop-cH/2+aH/2,behavior:reset?"auto":"smooth"});
+    }
+  }
+  updateFlux();
+}
+function jumpTo(i){idx=i;renderStep()}
+function fireReaction(){
+  const st=currentStep(), f=effFactor();
+  totals.atp+=(st.atp||0)*f; totals.nadh+=(st.nadh||0)*f;
+  totals.fadh+=(st.fadh||0); totals.co2+=(st.co2||0); totals.rx++;
+  heroAtp+=Math.max(0,(st.atp||0))*f;
+  $("atpCount").textContent=totals.atp.toFixed(1);
+  $("nadhCount").textContent=totals.nadh.toFixed(1);
+  $("fadhCount").textContent=totals.fadh.toFixed(1);
+  $("co2Count").textContent=totals.co2.toFixed(1);
+  $("heroAtp").textContent=Math.floor(heroAtp);
+  $("heroRx").textContent=totals.rx;
+  // pulse product
+  const mp=$("molProd"); mp.style.transform="scale(1.06)"; setTimeout(()=>mp.style.transform="",220);
+  idx=(idx+1)%PATHWAYS[curPath].steps.length;
+  renderStep();
+}
+function loop(){clearInterval(timer);const ms=parseInt($("speed").value);if(playing)timer=setInterval(fireReaction,ms)}
+$("btnPlay").onclick=()=>{playing=!playing;$("btnPlay").textContent=playing?"⏸":"▶";loop();toast(playing?"Simulation resumed":"Paused")};
+$("btnNext").onclick=()=>fireReaction();
+$("btnReset").onclick=()=>{idx=0;totals={atp:0,nadh:0,fadh:0,co2:0,rx:0};renderStep();$("atpCount").textContent="0";$("nadhCount").textContent="0";$("fadhCount").textContent="0";$("co2Count").textContent="0";toast("Reactor reset")};
+$("speed").oninput=e=>{$("speedVal").textContent=(e.target.value/1000).toFixed(1)+"s";loop()};
+$("temp").oninput=e=>{$("tempVal").textContent=e.target.value+"°C";renderStep()};
+$("ph").oninput=e=>{$("phVal").textContent=e.target.value;renderStep()};
+$("btnCopy").onclick=()=>{const st=currentStep();navigator.clipboard?.writeText(`${PATHWAYS[curPath].name} — ${st.s} → ${st.p} | ${st.e} | ΔG ${st.dg} kJ/mol | ${st.eq}`);toast("Reaction copied to clipboard ⧉")};
+
+// ---------- TYPED ----------
+const words=["ATP…","NADH…","pyruvate…","citrate…","acetyl-CoA…","glucose…"];
+let wi=0,ci=0,del=false;
+(function type(){const w=words[wi];$("typed").textContent=del?w.slice(0,--ci):w.slice(0,++ci);
+if(!del&&ci===w.length)setTimeout(()=>del=true,900);else if(del&&ci===0){del=false;wi=(wi+1)%words.length}
+setTimeout(type,del?35:70)})();
+
+// ---------- HERO PARTICLES ----------
+const cv=$("net"),ctx=cv.getContext("2d");let pts=[],mouse={x:-999,y:-999};
+const LABELS=["ATP","NAD+","G6P","PEP","CoA","OAA","FAD","ADP","Pi","CO₂"];
+function resize(){cv.width=cv.offsetWidth;cv.height=cv.offsetHeight;
+  pts=Array.from({length:Math.min(110,cv.width/12)},()=>({x:Math.random()*cv.width,y:Math.random()*cv.height,vx:(Math.random()-.5)*.5,vy:(Math.random()-.5)*.5,r:Math.random()*2+1.2,l:LABELS[Math.floor(Math.random()*LABELS.length)],c:["#22d3ee","#a78bfa","#bef264","#f472b6"][Math.floor(Math.random()*4)]}))}
+window.addEventListener("resize",resize);resize();
+cv.parentElement.addEventListener("mousemove",e=>{const r=cv.getBoundingClientRect();mouse.x=e.clientX-r.left;mouse.y=e.clientY-r.top});
+cv.parentElement.addEventListener("mouseleave",()=>{mouse.x=-999;mouse.y=-999});
+(function anim(){ctx.clearRect(0,0,cv.width,cv.height);
+  for(const p of pts){const dx=mouse.x-p.x,dy=mouse.y-p.y,d=Math.hypot(dx,dy);
+    if(d<180){p.vx+=dx/d*.02;p.vy+=dy/d*.02}
+    p.vx*=.985;p.vy*=.985;p.x+=p.vx;p.y+=p.vy;
+    if(p.x<0||p.x>cv.width)p.vx*=-1;if(p.y<0||p.y>cv.height)p.vy*=-1;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fillStyle=p.c;ctx.globalAlpha=.85;ctx.fill();ctx.globalAlpha=1;
+    if(Math.random()<.004){ctx.font="10px monospace";ctx.fillStyle="rgba(139,152,184,.7)";ctx.fillText(p.l,p.x+8,p.y-6)}
+  }
+  ctx.strokeStyle="rgba(34,211,238,.13)";ctx.lineWidth=1;
+  for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){const a=pts[i],b=pts[j],d=Math.hypot(a.x-b.x,a.y-b.y);
+    if(d<130){ctx.globalAlpha=(1-d/130)*.8;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.globalAlpha=1}}
+  requestAnimationFrame(anim)})();
+
+// ---------- MARQUEE dup ----------
+$("marqueeInner").innerHTML+=$("marqueeInner").innerHTML;
+
+// ---------- KINETICS ----------
+function drawMM(){
+  const {S,V,K,v0}=mmVelocity();
+  $("sVal").textContent=S.toFixed(1);$("vmaxVal").textContent=V;$("kmVal").textContent=K.toFixed(1);
+  $("v0").textContent=v0.toFixed(1);
+  $("kinState").textContent=S>K*2?"● near saturation — adding S barely helps":S<K/2?"● first-order zone — v rises with [S]":"● mixed zone — around Km";
+  $("kinState").style.color=S>K*2?"var(--lime)":S<K/2?"var(--cyan)":"var(--amber)";
+  const c=$("mmCanvas"),g=c.getContext("2d"),DPR=devicePixelRatio||1;
+  c.width=c.offsetWidth*DPR;c.height=360*DPR;g.scale(DPR,DPR);
+  const W=c.offsetWidth,H=360,pad=44;
+  g.clearRect(0,0,W,H);
+  g.strokeStyle="rgba(255,255,255,.1)";g.fillStyle="#8b98b8";g.font="11px monospace";
+  for(let i=0;i<=5;i++){const y=pad+(H-2*pad)*i/5;g.beginPath();g.moveTo(pad,y);g.lineTo(W-16,y);g.stroke();g.fillText(Math.round(V*(1-i/5)),8,y+4)}
+  const X=s=>pad+(W-pad-16)*(s/10), Y=v=>pad+(H-2*pad)*(1-v/(V*1.1));
+  // Km dashed
+  g.setLineDash([5,5]);g.strokeStyle="rgba(251,191,36,.5)";g.beginPath();g.moveTo(X(K),Y(0));g.lineTo(X(K),Y(V*K/(K+K)));g.lineTo(pad,Y(V/2));g.stroke();g.setLineDash([]);
+  g.fillStyle="#fbbf24";g.fillText("Km="+K,X(K)+4,Y(0)+12);g.fillText("Vmax/2",pad+4,Y(V/2)-6);
+  // curve
+  g.beginPath();for(let s=0;s<=10;s+=.05){const v=V*s/(K+s);s===0?g.moveTo(X(s),Y(v)):g.lineTo(X(s),Y(v))}
+  g.strokeStyle="#22d3ee";g.lineWidth=3;g.shadowColor="#22d3ee";g.shadowBlur=12;g.stroke();g.shadowBlur=0;
+  // point
+  const t=performance.now()/600, bob=Math.sin(t)*4;
+  g.beginPath();g.arc(X(S),Y(v0)+bob*.2,7,0,7);g.fillStyle="#bef264";g.fill();
+  g.beginPath();g.arc(X(S),Y(v0)+bob*.2,12,0,7);g.strokeStyle="rgba(190,242,100,.4)";g.stroke();
+  g.fillStyle="#04070f";g.font="bold 9px sans-serif";g.fillText("●",X(S)-3.5,Y(v0)+bob*.2+3);
+  g.fillStyle="#8b98b8";g.font="11px monospace";g.fillText("[S] substrate (mM)",W/2-60,H-10);
+  updateFlux();
+}
+["sSlider","vmaxSlider","kmSlider"].forEach(id=>$(id).addEventListener("input",drawMM));
+
+// ---------- MOLECULE DOSSIERS ----------
+function chipHTML(paths){
+  return paths.map(k=>`<button class="pchip" data-path="${k}" title="Open ${PATH_LABEL[k]} in the lab">${PATH_LABEL[k]}</button>`).join("");
+}
+function renderMols(){
+  $("molGrid").innerHTML=METABOLITES.map(m=>
+    `<article class="mol-card card" data-id="${m.id}" tabindex="0" role="button" aria-label="${m.name} dossier">
+      <div class="mol-top"><span class="role">${m.role}</span><span class="charge">${m.charge}</span></div>
+      <div class="mol-stage">${m.svg}</div>
+      <h3 class="mol-name">${m.name}<span>${m.sub}</span></h3>
+      <p class="mol-story">${m.story}</p>
+      <div class="mol-meta"><span class="formula">${m.formula}</span><span class="mass">${m.mass}</span><span class="keystat">${m.key}</span></div>
+      <div class="mol-paths">${chipHTML(m.paths)}</div>
+      <div class="inspect">Inspect dossier →</div>
+    </article>`
+  ).join("");
+  document.querySelectorAll(".mol-card").forEach(card=>{
+    card.addEventListener("click",e=>{
+      const chip=e.target.closest(".pchip");
+      if(chip){e.stopPropagation();selectPath(chip.dataset.path);document.querySelector("#lab").scrollIntoView({behavior:"smooth"});return;}
+      openDossier(card.dataset.id);
+    });
+    card.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openDossier(card.dataset.id);}});
+  });
+}
+function openDossier(id){
+  const m=METABOLITES.find(x=>x.id===id); if(!m)return;
+  $("dossierCard").innerHTML=`
+    <button class="btn dclose" onclick="closeDossier()">✕</button>
+    <div class="kicker">${m.role}</div>
+    <h2 style="margin:6px 0 0;letter-spacing:-.02em">${m.name} <span style="color:var(--mut);font-weight:500;font-size:15px;font-style:italic">${m.sub}</span></h2>
+    <div class="dossier-grid">
+      <div class="mol-stage">${m.svg}</div>
+      <div>
+        <div class="mol-meta"><span class="formula">${m.formula}</span><span class="mass">${m.mass}</span></div>
+        <dl class="kv">
+          <dt>Charge</dt><dd>${m.charge}</dd>
+          <dt>Made in</dt><dd>${m.madeIn}</dd>
+          <dt>Used in</dt><dd>${m.usedIn}</dd>
+          <dt>Key bond</dt><dd>${m.bond}</dd>
+          <dt>Why it matters</dt><dd>${m.story}</dd>
+          <dt>Agent file</dt><dd>${m.fact}</dd>
+        </dl>
+        <div class="cta-row" style="justify-content:flex-start;margin-top:16px">
+          <button class="btn primary" onclick="dossierSim('${m.target}')">⚡ Simulate in lab</button>
+          <button class="btn" onclick="closeDossier()">Back to agents</button>
+        </div>
+      </div>
+    </div>`;
+  $("dossier").classList.add("open"); document.body.style.overflow="hidden";
+}
+function closeDossier(){$("dossier").classList.remove("open");document.body.style.overflow="";}
+function dossierSim(target){closeDossier();selectPath(target);document.querySelector("#lab").scrollIntoView({behavior:"smooth"});toast("Simulating — "+PATHWAYS[target].name+" ⚡");}
+$("dossier").addEventListener("click",e=>{if(e.target.id==="dossier")closeDossier();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDossier();});
+
+// ---------- REVEAL ----------
+const io=new IntersectionObserver(es=>es.forEach(e=>e.isIntersecting&&e.target.classList.add("visible")),{threshold:.12});
+document.querySelectorAll(".reveal").forEach(el=>io.observe(el));
+
+// ---------- INIT ----------
+renderPathList();renderStep();drawMM();renderMols();loop();
+$("heroEnz").textContent="43"; // cofactors placed across the five 3D ETC complexes
+window.selectPath=selectPath;window.jumpTo=jumpTo;window.toast=toast;window.closeDossier=closeDossier;window.dossierSim=dossierSim;
+</script>
+</body>
+</html>

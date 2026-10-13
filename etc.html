@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Electron Transport Chain — 3D Simulation · Centheses</title>
+<style>
+  :root{
+    --bg:#04070f; --panel:rgba(10,16,30,.78); --line:rgba(255,255,255,.1);
+    --txt:#e8eefc; --mut:#8b98b8; --cyan:#22d3ee; --vio:#a78bfa;
+    --lime:#bef264; --pink:#f472b6; --amber:#fbbf24; --red:#f87171;
+    --font:ui-sans-system,-apple-system,"Inter","SF Pro",Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:var(--font);overflow:hidden}
+  #scene{position:fixed;inset:0}
+  #scene canvas{display:block}
+  .hud{position:fixed;z-index:10}
+  /* top bar */
+  #topbar{top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:14px 16px;pointer-events:none}
+  #topbar>*{pointer-events:auto}
+  .brand{display:flex;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:9px 14px;backdrop-filter:blur(14px)}
+  .brand a{color:var(--cyan);font-family:var(--mono);font-size:12px}
+  .brand b{font-size:14px;letter-spacing:.02em}
+  .brand small{display:block;color:var(--mut);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase}
+  #stats{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:7px 12px;min-width:86px;backdrop-filter:blur(14px)}
+  .stat span{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)}
+  .stat strong{display:block;font-size:17px;font-variant-numeric:tabular-nums;margin-top:1px}
+  #gradWrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px;backdrop-filter:blur(14px);min-width:190px}
+  #gradWrap span{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)}
+  #gradBar{height:8px;border-radius:99px;background:rgba(255,255,255,.08);margin-top:6px;overflow:hidden}
+  #gradBar i{display:block;height:100%;width:30%;background:linear-gradient(90deg,var(--cyan),var(--lime));transition:width .3s}
+  #gradTxt{font-family:var(--mono);font-size:11px;color:var(--lime)}
+  /* side panels */
+  .panel{position:fixed;z-index:10;background:var(--panel);border:1px solid var(--line);border-radius:16px;backdrop-filter:blur(16px);padding:14px;width:248px;max-height:calc(100vh - 170px);overflow:auto}
+  #controls{left:16px;top:50%;transform:translateY(-50%)}
+  #dossier{right:16px;top:50%;transform:translateY(-50%);width:288px}
+  .panel h3{margin:0 0 4px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--mut);font-family:var(--mono)}
+  .row{margin:10px 0}
+  .row label{font-size:11px;color:var(--mut);letter-spacing:.08em;text-transform:uppercase;display:flex;justify-content:space-between;margin-bottom:5px}
+  .row label output{color:var(--cyan);font-family:var(--mono)}
+  input[type=range]{width:100%;accent-color:var(--cyan)}
+  .btnrow{display:flex;gap:6px;flex-wrap:wrap}
+  button{font-family:var(--font)}
+  .btn{border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--txt);padding:8px 12px;border-radius:10px;font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s}
+  .btn:hover{border-color:var(--cyan)}
+  .btn.primary{background:linear-gradient(135deg,#22d3ee,#818cf8);border:0;color:#04070f}
+  .btn.on{background:rgba(190,242,100,.14);border-color:var(--lime);color:var(--lime)}
+  .btn.blocked{background:rgba(248,113,113,.14)!important;border-color:var(--red)!important;color:var(--red)!important}
+  .inhib{display:flex;flex-direction:column;gap:6px}
+  .inhib .btn{text-align:left;font-size:12px}
+  .inhib .btn small{color:var(--mut);font-weight:400}
+  .inhib .btn.hit{border-color:var(--amber)!important;color:var(--amber)!important;box-shadow:0 0 0 3px rgba(251,191,36,.3),0 0 26px rgba(251,191,36,.45);transform:scale(1.03)}
+  .tour{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+  .tour .btn{padding:7px 4px;font-size:12px;font-family:var(--mono)}
+  #dossier h2{margin:2px 0 2px;font-size:17px;letter-spacing:-.01em}
+  #dossier .pdb{font-family:var(--mono);font-size:11px;color:var(--cyan)}
+  #dossier p{font-size:12.5px;line-height:1.6;color:#c3cde6;margin:8px 0}
+  #dossier .rxn{font-family:var(--mono);font-size:11.5px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.25);border-radius:10px;padding:8px 10px;color:#a5f3fc;line-height:1.5}
+  .cofs{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+  .cofs span{font-family:var(--mono);font-size:10.5px;padding:3px 8px;border-radius:99px;border:1px solid var(--line);background:rgba(255,255,255,.04)}
+  /* log */
+  #log{left:16px;bottom:14px;width:min(430px,calc(100vw - 32px));background:rgba(4,8,16,.72);border:1px solid var(--line);border-radius:12px;padding:9px 13px;font-family:var(--mono);font-size:11.5px;color:var(--mut);backdrop-filter:blur(12px)}
+  #log div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #log div:first-child{color:var(--txt)}
+  #legend{right:16px;bottom:14px;background:rgba(4,8,16,.72);border:1px solid var(--line);border-radius:12px;padding:9px 13px;font-family:var(--mono);font-size:10.5px;color:var(--mut);backdrop-filter:blur(12px);display:flex;gap:12px;flex-wrap:wrap;max-width:44vw}
+  #legend i{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px}
+  /* chain minimap — never lose totality */
+  #minimap{right:16px;bottom:104px;width:264px;background:rgba(4,8,16,.8);border:1px solid var(--line);border-radius:12px;padding:9px 12px 7px;backdrop-filter:blur(12px)}
+  #mapTitle{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--mut);margin-bottom:2px}
+  #mapTitle span{color:var(--lime)}
+  #mapSvg{width:100%;height:auto;display:block}
+  #mapSvg .mm-lab{fill:var(--mut);font-size:9px;font-family:var(--mono)}
+  #mapSvg .mm-cx{cursor:pointer}
+  #mapSvg .mm-cx rect{fill:rgba(255,255,255,.06);stroke:var(--line);transition:.2s}
+  #mapSvg .mm-cx text{fill:var(--mut);font-size:11px;font-weight:700;font-family:var(--mono);text-anchor:middle;transition:.2s}
+  #mapSvg .mm-cx:hover rect{stroke:var(--cyan)}
+  #mapSvg .mm-cx.on rect{fill:rgba(190,242,100,.22);stroke:var(--lime)}
+  #mapSvg .mm-cx.on text{fill:#d9f99d}
+  #mm-pool circle{fill:#475569;transition:.2s}
+  #mm-pool.on circle{fill:var(--lime)}
+  #mm-cyt circle{fill:#7f1d1d;transition:.2s}
+  #mm-cyt.on circle{fill:#f9a8d4}
+  #mm-mem{transition:.2s}
+  #mm-mem.hot{stroke:var(--lime);filter:drop-shadow(0 0 4px #bef264)}
+  /* loader / fallback */
+  #loader{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:var(--bg);transition:opacity .5s}
+  #loader.done{opacity:0;pointer-events:none}
+  #loader div{text-align:center;color:var(--mut);font-family:var(--mono);font-size:13px;line-height:2}
+  .spin{width:44px;height:44px;border-radius:50%;border:3px solid rgba(34,211,238,.2);border-top-color:var(--cyan);margin:0 auto;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  #nogl{position:fixed;inset:0;z-index:60;display:none;place-items:center;background:var(--bg);text-align:center;padding:30px}
+  #toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%) translateY(20px);background:#0b1226;border:1px solid rgba(34,211,238,.4);padding:10px 18px;border-radius:12px;opacity:0;transition:.3s;z-index:40;font-size:13px;pointer-events:none}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  /* cinematic captions */
+  #caption{position:fixed;z-index:60;bottom:10px;left:50%;transform:translateX(-50%) translateY(12px);width:min(600px,calc(100vw - 32px));background:rgba(6,10,22,.4);border:1px solid rgba(190,242,100,.22);border-radius:12px;padding:8px 14px;backdrop-filter:blur(10px);opacity:0;pointer-events:none;transition:.35s}
+  #caption.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+  #capKick{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--lime)}
+  #capText{font-size:13.5px;line-height:1.45;margin-top:3px}
+  #capFoot{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+  #capDots{font-family:var(--mono);font-size:11px;color:var(--mut);letter-spacing:3px}
+  #capStop{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.5);color:#fca5a5;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer}
+  body.cine #log{bottom:120px}
+  #log{transition:bottom .3s}
+  .hint{font-family:var(--mono);font-size:10.5px;color:var(--mut);line-height:1.9}
+  .hint kbd{font-family:var(--mono);font-size:10px;background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--txt)}
+  /* textbook scheme modal */
+  #scheme{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(2,5,12,.72);backdrop-filter:blur(8px)}
+  #scheme.open{display:flex}
+  .scheme-card{width:min(980px,100%);max-height:92vh;overflow:auto;display:grid;grid-template-columns:1fr 1fr;gap:0;position:relative;background:var(--panel);border:1px solid var(--line);border-radius:18px;backdrop-filter:blur(18px)}
+  @media(max-width:820px){.scheme-card{grid-template-columns:1fr}}
+  .figpage{background:#faf6ec;color:#1e293b;border-radius:18px 0 0 18px;padding:18px 18px 14px}
+  @media(max-width:820px){.figpage{border-radius:18px 18px 0 0}}
+  .figpage .figno{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#b45309;margin-bottom:8px}
+  .figpage svg{width:100%;height:auto;display:block;background:#faf6ec}
+  .figcap{font-size:12px;line-height:1.6;color:#475569;border-top:2px solid #1e293b;margin-top:8px;padding-top:8px}
+  .figcap b{color:#1e293b}
+  .sch-text{padding:24px;position:relative}
+  .sch-text h2{margin:2px 0;font-size:22px;letter-spacing:-.01em}
+  .sch-text .pdb{font-family:var(--mono);font-size:11px;color:var(--cyan)}
+  .sch-text p{font-size:13.5px;line-height:1.65;color:#c3cde6}
+  .sch-text .rxn{font-family:var(--mono);font-size:12px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.25);border-radius:10px;padding:9px 11px;color:#a5f3fc;line-height:1.55}
+  .sch-close{position:absolute;top:12px;right:12px;z-index:2}
+  @media(max-width:1100px){#dossier{display:none}#controls{width:212px}}
+  #sheetToggle,.minirow{display:none}
+  #mBack{display:none}
+  @media(max-width:760px){
+    #topbar{display:none}
+    #mBack{display:grid;place-items:center;position:fixed;top:12px;right:12px;z-index:70;width:46px;height:46px;border-radius:50%;background:rgba(10,16,30,.82);border:1px solid var(--line);color:var(--txt);font-size:21px;backdrop-filter:blur(12px);cursor:pointer;padding:0}
+    #mBack:active{transform:scale(.94)}
+    #controls{top:auto;bottom:0;left:0;right:0;width:auto;transform:none;max-height:20vh;border-radius:18px 18px 0 0;padding:8px 12px calc(10px + env(safe-area-inset-bottom));overflow:hidden}
+    #controls .panel-body{display:none}
+    #controls.open{max-height:72vh}
+    #controls.open .panel-body{display:block;overflow-y:auto;max-height:calc(72vh - 120px);margin-top:6px}
+    #sheetToggle{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:transparent;border:0;color:var(--mut);font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;padding:6px;cursor:pointer}
+    .minirow{display:flex;gap:8px;margin-top:2px}
+    .minirow .btn{flex:1;padding:10px 4px;font-size:15px}
+    #controls.open .minirow{display:none}
+    #stats{display:none}#legend{display:none}#log{display:none}#minimap{display:none}
+    #caption{bottom:108px;width:calc(100vw - 24px);padding:8px 12px}
+    #capText{font-size:12.5px}
+    body.sheet-open #caption{bottom:calc(72vh + 6px)}
+  }
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+</head>
+<body>
+<div id="scene"></div>
+
+<div class="hud" id="topbar">
+  <div class="brand">
+    <div><b>⚡ ETC · 3D Electron Transport Chain</b><small>real PDB backbones · live simulation</small></div>
+    <a href="./index.html">← back to Centheses</a>
+  </div>
+  <div id="stats">
+    <div id="gradWrap"><span>Proton gradient Δp · <b id="gradTxt">35%</b></span><div id="gradBar"><i id="gradFill"></i></div></div>
+    <div class="stat"><span>ATP made</span><strong id="sAtp" style="color:var(--lime)">0</strong></div>
+    <div class="stat"><span>NADH</span><strong id="sNadh" style="color:var(--cyan)">20</strong></div>
+    <div class="stat"><span>FADH₂</span><strong id="sFadh" style="color:var(--vio)">10</strong></div>
+    <div class="stat"><span>QH₂ / Q</span><strong id="sQ">0/10</strong></div>
+    <div class="stat"><span>Cyt c red</span><strong id="sCyt">0/8</strong></div>
+    <div class="stat"><span>O₂</span><strong id="sO2" style="color:var(--pink)">100%</strong></div>
+  </div>
+</div>
+
+<div class="panel" id="controls">
+  <button id="sheetToggle"><span id="sheetChev">▲</span> Simulation · story · inhibitors</button>
+  <div class="minirow">
+    <button class="btn primary" id="mPlay">⏸</button>
+    <button class="btn" id="mStory">▶ story</button>
+    <button class="btn" id="mStop">✕</button>
+  </div>
+  <div class="panel-body">
+  <h3>Simulation</h3>
+  <div class="btnrow">
+    <button class="btn primary" id="bStory" style="flex:1">▶ Full chain story</button>
+  </div>
+  <div class="btnrow" style="margin-top:6px">
+    <button class="btn primary" id="bPlay">⏸ Pause</button>
+    <button class="btn on" id="bFeed">Auto-feed ON</button>
+    <button class="btn" id="bRot">⟳ view</button>
+  </div>
+  <div class="btnrow" style="margin-top:6px">
+    <button class="btn on" id="bFly">✈ WASD fly</button>
+    <button class="btn on" id="bLabels">🏷 Labels</button>
+  </div>
+  <div class="hint" style="margin-top:6px"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>Q</kbd>/<kbd>E</kbd> down/up · <kbd>Shift</kbd> fast<br>drag to orbit · scroll to zoom · <b style="color:var(--cyan)">click a complex for its textbook figure</b></div>
+  <h3 style="margin-top:14px">Narrator · free voice</h3>
+  <div class="btnrow"><button class="btn on" id="bNarr">🔊 Narration ON</button></div>
+  <div class="row"><label>Voice <output id="oVoice">auto</output></label>
+    <select id="vVoice" style="width:100%;background:rgba(255,255,255,.06);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:8px;font-size:12px"></select>
+  </div>
+  <div class="row"><label>Speed <output id="oSpeed">1.0×</output></label><input id="rSpeed" type="range" min="0.2" max="3" step="0.1" value="1"></div>
+  <div class="row"><label>O₂ supply (breathing) <output id="oO2">100%</output></label><input id="rO2" type="range" min="0" max="100" value="100"></div>
+  <div class="btnrow">
+    <button class="btn" id="bNadh">+ NADH</button>
+    <button class="btn" id="bFadh">+ FADH₂</button>
+  </div>
+  <h3 style="margin-top:14px">Inhibitors</h3>
+  <div class="inhib">
+    <button class="btn" data-inh="rotenone">Rotenone <small>blocks Complex I</small></button>
+    <button class="btn" data-inh="malonate">Malonate <small>blocks Complex II</small></button>
+    <button class="btn" data-inh="antimycin">Antimycin A <small>blocks Complex III</small></button>
+    <button class="btn" data-inh="cyanide">Cyanide <small>blocks Complex IV</small></button>
+    <button class="btn" data-inh="oligomycin">Oligomycin <small>blocks ATP synthase</small></button>
+  </div>
+  <h3 style="margin-top:14px">Camera tour</h3>
+  <div class="tour">
+    <button class="btn" data-cam="all">All</button>
+    <button class="btn" data-cam="CI">I</button>
+    <button class="btn" data-cam="CII">II</button>
+    <button class="btn" data-cam="CIII">III</button>
+    <button class="btn" data-cam="CIV">IV</button>
+    <button class="btn" data-cam="CV">V</button>
+  </div>
+  <div class="btnrow" style="margin-top:6px">
+    <button class="btn" id="bMito" style="flex:1">🔍 Mitochondrion</button>
+  </div>
+  </div>
+</div>
+<button id="mBack" aria-label="Back">←</button>
+
+<div class="panel" id="dossier">
+  <h3 id="dPdb">PDB 5XTD</h3>
+  <h2 id="dName">Complex I</h2>
+  <p id="dNote"></p>
+  <div class="rxn" id="dRxn"></div>
+  <p style="color:var(--mut);font-size:11.5px" id="dSub"></p>
+  <div class="cofs" id="dCof"></div>
+</div>
+
+<div class="hud" id="log"></div>
+<div class="hud" id="legend">
+  <span><i style="background:#22d3ee"></i>e⁻ electrons</span>
+  <span><i style="background:#f472b6"></i>H⁺ protons</span>
+  <span><i style="background:#bef264"></i>QH₂/Q · ATP · c²⁺/c³⁺</span>
+  <span><i style="background:#fde047"></i>flavin</span>
+  <span><i style="background:#fb923c"></i>Fe–S</span>
+  <span><i style="background:#ef4444"></i>heme</span>
+  <span><i style="background:#2dd4bf"></i>Cu</span>
+</div>
+<div class="hud" id="minimap">
+  <div id="mapTitle">CHAIN MAP · <span id="mapWhere">overview</span></div>
+  <svg viewBox="0 0 260 78" id="mapSvg">
+    <text x="4" y="10" class="mm-lab">IMS · H⁺ high</text>
+    <rect id="mm-mem" x="4" y="26" width="252" height="18" rx="4" fill="rgba(180,83,9,.15)" stroke="#b45309"/>
+    <text x="4" y="70" class="mm-lab">matrix · H⁺ low</text>
+    <g class="mm-cx" data-seq="CI"><rect x="10" y="22" width="46" height="26" rx="5"/><text x="33" y="39">I</text></g>
+    <g class="mm-cx" data-seq="CII"><rect x="60" y="24" width="30" height="22" rx="5"/><text x="75" y="39">II</text></g>
+    <g class="mm-cx" data-seq="CIII"><rect x="94" y="22" width="46" height="26" rx="5"/><text x="117" y="39">III</text></g>
+    <g class="mm-cx" data-seq="CIV"><rect x="144" y="22" width="40" height="26" rx="5"/><text x="164" y="39">IV</text></g>
+    <g class="mm-cx" data-seq="CV"><rect x="188" y="22" width="58" height="26" rx="5"/><text x="217" y="39">V</text></g>
+    <g id="mm-pool"><circle cx="58" cy="35" r="3"/><circle cx="92" cy="35" r="3"/><circle cx="142" cy="35" r="3"/><circle cx="186" cy="35" r="3"/></g>
+    <g id="mm-cyt"><circle cx="122" cy="15" r="3.2"/><circle cx="134" cy="15" r="3.2"/></g>
+  </svg>
+</div>
+
+<div id="loader"><div><div class="spin"></div>loading real protein backbones…<br><span id="loadMsg">fetching etc-data.json</span></div></div>
+<div id="scheme"><div class="scheme-card">
+  <div class="figpage"><div class="figno" id="schNo"></div><div id="schFig"></div><div class="figcap" id="schCap"></div></div>
+  <div class="sch-text">
+    <button class="btn sch-close" id="schClose">✕</button>
+    <div class="pdb" id="schPdb"></div>
+    <h2 id="schName"></h2>
+    <p id="schNote"></p>
+    <div class="rxn" id="schRxn"></div>
+    <p style="color:var(--mut);font-size:12px" id="schSub"></p>
+    <div class="cofs" id="schCof"></div>
+    <div class="btnrow" style="margin-top:14px">
+      <button class="btn primary" id="schCine">▶ Watch it happen</button>
+      <button class="btn" id="schFly">✈ Fly here</button>
+      <button class="btn" id="schSpeak">🔊 Replay</button>
+      <button class="btn" id="schBack">Close</button>
+    </div>
+  </div>
+</div></div>
+<div id="nogl"><div><h2>WebGL unavailable</h2><p style="color:var(--mut)">This simulation needs WebGL.<br>Try a Chromium/Firefox/Safari build with hardware acceleration.</p><a href="./index.html" style="color:var(--cyan)">← back</a></div></div>
+<div id="toast"></div>
+<div id="caption"><div id="capKick"></div><div id="capText"></div><div id="capFoot"><span id="capDots"></span><button id="capStop">✕ stop explanation</button></div></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from './vendor/OrbitControls.js';
+
+const $ = id => document.getElementById(id);
+const logLines = [];
+function log(m){ logLines.unshift(m); while(logLines.length>4)logLines.pop();
+  $('log').innerHTML = logLines.map(l=>`<div>› ${l}</div>`).join(''); }
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show');
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2200); }
+
+// ---------- state ----------
+const S = { playing:true, speed:1, feed:true, o2target:1, rotate:false,
+  nadh:20, fadh2:10, q:10, qh2:0, cox:8, cred:0, o2:1, grad:0.35, atp:0,
+  inh:{rotenone:false,malonate:false,antimycin:false,cyanide:false,oligomycin:false} };
+const K = { CI:1.1, CII:0.8, CIII:1.6, CIV:1.8, CV:2.4 };
+let o2Warned=false, gradWarned=false;
+
+// ---------- three setup ----------
+let renderer;
+try{
+  renderer = new THREE.WebGLRenderer({antialias:true});
+}catch(e){ document.querySelector('#nogl').style.display='grid'; $('loader').classList.add('done'); throw e; }
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+$('scene').appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x04070f);
+scene.fog = new THREE.Fog(0x04070f, 90, 220);
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 1000);
+camera.position.set(-4, 32, 108);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0, 0);
+controls.enableDamping = true; controls.maxDistance = 180; controls.minDistance = 8;
+controls.autoRotateSpeed = 0.8;
+scene.add(new THREE.HemisphereLight(0x9db8ff, 0x0a0f1e, 0.9));
+const dir = new THREE.DirectionalLight(0xffffff, 1.6); dir.position.set(30,50,40); scene.add(dir);
+const rim = new THREE.DirectionalLight(0x22d3ee, 0.5); rim.position.set(-40,-20,-30); scene.add(rim);
+addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+
+// ---------- helpers ----------
+function textSprite(text, color='#8b98b8', size=42){
+  const c=document.createElement('canvas'); c.width=512; c.height=128;
+  const g=c.getContext('2d'); g.font=`600 ${size}px ui-monospace,monospace`;
+  g.textAlign='center'; g.textBaseline='middle'; g.fillStyle=color; g.fillText(text,256,64);
+  const t=new THREE.CanvasTexture(c); t.anisotropy=4;
+  const m=new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false});
+  const s=new THREE.Sprite(m); s.scale.set(11,2.75,1); return s;
+}
+const V3 = a => new THREE.Vector3(a[0],a[1],a[2]);
+
+// ---------- membrane ----------
+{
+  const memMat = new THREE.MeshStandardMaterial({color:0x1b2b4a,transparent:true,opacity:0.35,roughness:0.4,metalness:0.3,side:THREE.DoubleSide});
+  for(const y of [-2,2]){
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(180,52), memMat);
+    p.rotation.x = -Math.PI/2; p.position.y = y; scene.add(p);
+  }
+  // lipid heads
+  const hg = new THREE.SphereGeometry(0.42,6,6);
+  const hm = new THREE.MeshStandardMaterial({color:0x3b5a8f,roughness:0.6});
+  const inst = new THREE.InstancedMesh(hg,hm,700);
+  const d = new THREE.Object3D(); let i=0;
+  for(let k=0;k<700;k++){
+    d.position.set((Math.random()-0.5)*170, (k%2?2:-2)+(Math.random()-0.5)*0.5, (Math.random()-0.5)*46);
+    d.updateMatrix(); inst.setMatrixAt(i++,d.matrix);
+  }
+  scene.add(inst);
+  const mL=textSprite('MATRIX · pH ~7.8','#5b6b8f'); mL.position.set(-62,-9,0); scene.add(mL);
+  const iL=textSprite('INTERMEMBRANE SPACE · pH ~7.0','#5b6b8f'); iL.position.set(62,10,0); scene.add(iL);
+}
+
+// ---------- mitochondrion context stage (separate stage, fog-exempt) ----------
+const mitoGroup=new THREE.Group(); mitoGroup.position.set(0,0,430); mitoGroup.visible=false; scene.add(mitoGroup);
+let mitoManual=false;
+function nofog(m){ m.fog=false; return m; }
+{
+  const outer=new THREE.Mesh(new THREE.SphereGeometry(1,48,32),
+    nofog(new THREE.MeshBasicMaterial({color:0x60a5fa,transparent:true,opacity:0.10,depthWrite:false})));
+  outer.scale.set(70,34,34); mitoGroup.add(outer);
+  const outerW=new THREE.Mesh(new THREE.SphereGeometry(1,24,16),
+    nofog(new THREE.MeshBasicMaterial({color:0x60a5fa,wireframe:true,transparent:true,opacity:0.12})));
+  outerW.scale.set(70,34,34); mitoGroup.add(outerW);
+  const inner=new THREE.Mesh(new THREE.SphereGeometry(1,40,28),
+    nofog(new THREE.MeshBasicMaterial({color:0xfbbf24,transparent:true,opacity:0.08,depthWrite:false,side:THREE.DoubleSide})));
+  inner.scale.set(60,27,27); mitoGroup.add(inner);
+  const cmat=nofog(new THREE.MeshBasicMaterial({color:0x2dd4bf,transparent:true,opacity:0.32,side:THREE.DoubleSide,depthWrite:false}));
+  for(let i=0;i<5;i++){
+    const g=new THREE.PlaneGeometry(52,20,24,10);
+    const pos=g.attributes.position;
+    for(let k=0;k<pos.count;k++)pos.setZ(k,Math.sin(pos.getX(k)*0.35+i)*3);
+    g.computeVertexNormals();
+    const m=new THREE.Mesh(g,cmat); m.position.set(-4+i*2,0,-14+i*7); m.rotation.y=0.25; mitoGroup.add(m);
+  }
+  const matrix=new THREE.Mesh(new THREE.SphereGeometry(1,32,20),
+    nofog(new THREE.MeshBasicMaterial({color:0x1d4ed8,transparent:true,opacity:0.16,depthWrite:false})));
+  matrix.scale.set(54,22,22); mitoGroup.add(matrix);
+  const patch=new THREE.Mesh(new THREE.PlaneGeometry(18,9),
+    nofog(new THREE.MeshBasicMaterial({color:0xbef264,transparent:true,opacity:0.9,side:THREE.DoubleSide,depthTest:false})));
+  patch.position.set(10,-26,6); patch.rotation.x=-0.5; patch.renderOrder=5; mitoGroup.add(patch);
+  mitoGroup.userData.patch=patch;
+  const mk=(t,x,y,z,c='#e8eefc',s=1)=>{ const sp=textSprite(t,c,44); sp.scale.set(20*s,5*s,1);
+    sp.position.set(x,y,z); sp.material.fog=false; mitoGroup.add(sp); };
+  mk('outer membrane',-52,32,0,'#93c5fd');
+  mk('intermembrane space',48,24,0,'#fca5a5');
+  mk('cristae · inner membrane',-46,-10,10,'#5eead4');
+  mk('matrix',30,-4,0,'#93c5fd');
+  mk('YOU ARE HERE · ETC',10,-35,6,'#bef264',1.25);
+}
+function mitoView(){ mitoManual=true; mitoGroup.visible=true; setMap('MITO');
+  $('bMito').textContent='↓ Dive to ETC'; $('bMito').classList.add('on');
+  flyTo(0,16,562, 0,0,430); log('mitochondrion · glowing patch = our inner-membrane patch'); }
+function diveView(){ mitoManual=false;
+  $('bMito').textContent='🔍 Mitochondrion'; $('bMito').classList.remove('on');
+  setMap(selected||'ALL');
+  flyTo(-4,32,108,-4,0,0);
+  setTimeout(()=>{ if(!mitoManual&&!SEQ.active)mitoGroup.visible=false; },1400); }
+$('bMito').onclick=()=>{ if(mitoManual&&mitoGroup.visible)diveView(); else { stopSeq(); mitoView(); } };
+
+// ---------- data ----------
+$('loadMsg').textContent='fetching etc-data.json (real Cα traces)';
+const data = await fetch('./etc-data.json').then(r=>{ if(!r.ok)throw new Error('etc-data '+r.status); return r.json(); });
+$('loadMsg').textContent='building '+data.complexes.length+' complexes…';
+
+const COLORS = { CI:0x38bdf8, CII:0xa78bfa, CIII:0xbef264, CIV:0xf472b6, CV:0xfbbf24 };
+const COF = { flavin:[0xfde047,0.5], nad:[0xc4b5fd,0.45], fes:[0xfb923c,0.42], heme:[0xef4444,0.5],
+  cu:[0x2dd4bf,0.45], quinone:[0xa3e635,0.45], mg:[0x94a3b8,0.35], adp:[0xfbbf24,0.4] };
+// ---------- particle stickers (labels baked on as sprites so e⁻/H⁺ read at any angle) ----------
+function stickerTexture(text, px=72){
+  const c=document.createElement('canvas'); c.width=c.height=128;
+  const g=c.getContext('2d'); g.font=`900 ${px}px ui-sans-serif,system-ui,sans-serif`;
+  g.textAlign='center'; g.textBaseline='middle';
+  g.lineWidth=10; g.strokeStyle='rgba(2,6,16,.92)'; g.strokeText(text,64,68);
+  g.fillStyle='#ffffff'; g.fillText(text,64,68);
+  const t=new THREE.CanvasTexture(c); t.anisotropy=4; return t;
+}
+const STICK={ e:stickerTexture('e⁻'), h:stickerTexture('H⁺'), atp:stickerTexture('ATP',50),
+  q:stickerTexture('Q'), qh2:stickerTexture('QH₂',46), cox:stickerTexture('c³⁺',44), cred:stickerTexture('c²⁺',44),
+  c:stickerTexture('c'), o2:stickerTexture('O₂',58), h2o:stickerTexture('H₂O',42) };
+function tag(mesh,tex,s,op=1){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false,opacity:op}));
+  sp.scale.set(s,s,1); sp.renderOrder=20; mesh.add(sp); return sp; }
+const POS = { CI:-46, CII:-22, CIII:-2, CIV:16, CV:36 };
+const CX = {};   // id -> {group, anchors, center}
+const pickable = [];
+
+for(const c of data.complexes){
+  const g = new THREE.Group(); g.position.set(POS[c.id],0,0);
+  const mat = new THREE.MeshStandardMaterial({color:COLORS[c.id],roughness:0.55,metalness:0.15,
+    emissive:COLORS[c.id],emissiveIntensity:0.06});
+  let n=0; const tubeMeshes=[], cofMeshes=[];
+  for(const ch of c.chains){
+    if(ch.length<2) continue;
+    if(ch.length===2){
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.3,6,6),mat.clone());
+      m.position.copy(V3(ch[0])); m.userData.pts=ch; g.add(m); n++; tubeMeshes.push(m); continue;
+    }
+    const pts = ch.map(V3);
+    const curve = new THREE.CatmullRomCurve3(pts);
+    const tube = new THREE.TubeGeometry(curve, Math.min(220,ch.length*4), 0.26, 5, false);
+    const mesh = new THREE.Mesh(tube,mat.clone()); mesh.userData.cx=c.id; mesh.userData.pts=ch; g.add(mesh); pickable.push(mesh); n++; tubeMeshes.push(mesh);
+  }
+  // cofactors
+  for(const cf of c.cofactors){
+    const [col,r] = COF[cf.t]||[0xffffff,0.4];
+    const m = new THREE.Mesh(new THREE.SphereGeometry(r,10,10),
+      new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:0.9,roughness:0.3}));
+    m.position.copy(V3(cf.p)); m.userData.cx=c.id; g.add(m); pickable.push(m);
+    cofMeshes.push({mesh:m,t:cf.t,rn:cf.rn,p:cf.p});
+  }
+  // anchors from trace geometry
+  const all = c.chains.flat();
+  const top = all.reduce((a,b)=>a[1]>b[1]?a:b), bot = all.reduce((a,b)=>a[1]<b[1]?a:b);
+  const mem = all.filter(p=>Math.abs(p[1])<2.5);
+  const near = f => all.reduce((a,b)=>Math.abs(f(b))<Math.abs(f(a))?b:a);
+  const qSite = mem.length? near(p=>p[0]-3) : [0,0,0];
+  CX[c.id] = { group:g, meta:c, mat, tubes:tubeMeshes, cofMeshes,
+    nadh:V3(top), bottom:V3(bot), q:V3(qSite),
+    mid:V3(all[Math.floor(all.length/2)]) };
+  const tagSpr = textSprite({CI:'COMPLEX I',CII:'COMPLEX II',CIII:'COMPLEX III',CIV:'COMPLEX IV',CV:'ATP SYNTHASE'}[c.id],
+    '#'+new THREE.Color(COLORS[c.id]).getHexString(), 46);
+  tagSpr.position.set(0, Math.max(9, top[1]+3.5), 0); g.add(tagSpr);
+  scene.add(g);
+  log(`loaded ${c.id} · PDB ${c.pdb} · ${c.n_res} residues`);
+}
+// ---------- true electron routes through real cofactor coordinates ----------
+// JSON cofactor positions are complex-local (nm); world = local + group offset.
+const LW=(id,arr)=>arr.map(p=>p.clone().add(CX[id].group.position));
+const CL=(id,a)=>{ const v=a&&a.isVector3?a.clone():V3(a); return v.add(CX[id].group.position); };
+const cofs=(id,t,rn)=>CX[id].meta.cofactors.filter(c=>c.t===t&&(!rn||c.rn===rn)).map(c=>c.p);
+function projSort(list,from,to){ const ax=V3(to).sub(V3(from));
+  if(ax.lengthSq()<1e-6)return list.map(V3);
+  ax.normalize();
+  return list.map(p=>({p,d:V3(p).dot(ax)})).sort((a,b)=>a.d-b.d).map(o=>V3(o.p)); }
+function nearestTo(list,pt){ let b=list[0],bd=1e9; for(const p of list){ const d=V3(p).distanceToSquared(V3(pt)); if(d<bd){bd=d;b=p;} } return V3(b); }
+{ // CI: NADH → FMN → 7 on-pathway Fe–S → Q cavity (N1a sits off-pathway)
+  const f=cofs('CI','flavin')[0], fes=cofs('CI','fes'), q=CX.CI.q;
+  let onPath=[], n1a=null;
+  if(f&&fes.length){
+    const F=V3(f), Q=V3(q), ax=Q.clone().sub(F), L=ax.length()||1; ax.normalize();
+    const scored=fes.map(p=>{ const v=V3(p).sub(F), proj=v.dot(ax);
+      const perp=v.clone().addScaledVector(ax,-proj).length(); return {p,proj,perp}; });
+    const half=scored.filter(s=>s.proj<L*0.5);
+    const n1aS=half.reduce((a,b)=>b.perp>a.perp?b:a);
+    n1a=n1aS.p;
+    onPath=scored.filter(s=>s.p!==n1a).sort((a,b)=>a.proj-b.proj).map(s=>V3(s.p));
+    console.log('CI N1a candidate: perp',n1aS.perp.toFixed(2),'nm proj',n1aS.proj.toFixed(2),'nm; wire:',onPath.length);
+  }
+  const chain=(f&&onPath.length)?[V3(f),...onPath]:[];
+  CX.CI.eroute=[CX.CI.nadh.clone(),...chain,V3(q)];
+  CX.CI.fesOrdered=chain.slice(1);
+  CX.CI.n1a=n1a?V3(n1a):null;
+}
+{ // CII: succinate → FAD → 3×Fe–S → heme b → bound Q (Qp)
+  const f=cofs('CII','flavin')[0], fes=cofs('CII','fes'), h=cofs('CII','heme')[0], u=cofs('CII','quinone')[0];
+  const mid=(f&&u)?projSort(fes,f,u):fes.map(V3);
+  CX.CII.eroute=[CX.CII.nadh.clone(),...(f?[V3(f)]:[]),...mid,...(h?[V3(h)]:[]),...(u?[V3(u)]:[])];
+}
+{ // CIII Q-cycle: Qo → Rieske→c1→cyt c  AND  Qo → bL→bH→Qi
+  const qo=CX.CIII.q.clone();
+  const F=cofs('CIII','fes')[0];
+  const hec=cofs('CIII','heme','HEC'), bhem=cofs('CIII','heme','HEM');
+  const side=Math.sign(qo.x)||1;
+  const bSide=bhem.filter(p=>Math.sign(p[0])===side);
+  const pool=bSide.length>=2?bSide:(bhem.length?bhem:[[qo.x,qo.y,0]]);
+  const ys=pool.map(p=>p[1]);
+  const bL=pool[ys.indexOf(Math.max(...ys))], bH=pool[ys.indexOf(Math.min(...ys))];
+  const qi=V3([-qo.x,qo.y,qo.z]);
+  CX.CIII.qo=qo; CX.CIII.qi=qi;
+  const c1tgt=F?nearestTo(hec.length?hec:[[F[0],F[1]+3,F[2]]],F):qo.clone();
+  CX.CIII.c1=c1tgt.clone();
+  CX.CIII.hp=F?[qo.clone(),V3(F),c1tgt.clone(),CX.CIII.nadh.clone()]:[qo.clone(),CX.CIII.nadh.clone()];
+  CX.CIII.lp=[qo.clone(),V3(bL),V3(bH),qi];
+}
+{ // CIV: cyt c → CuA → heme a → a3/CuB → O2
+  const cus=cofs('CIV','cu'), heas=cofs('CIV','heme');
+  const cuA=V3(cus.reduce((a,b)=>a[1]>b[1]?a:b));
+  const side=Math.sign(cuA.x)||1;
+  const hSide=heas.filter(p=>Math.sign(p[0])===side);
+  const hpool=hSide.length>=2?hSide:heas;
+  const hA=hpool.reduce((a,b)=>a[1]>b[1]?a:b), hA3=hpool.reduce((a,b)=>a[1]<b[1]?a:b);
+  CX.CIV.eroute=[CX.CIV.nadh.clone(),cuA.clone(),V3(hA),V3(hA3),CX.CIV.bottom.clone()];
+  CX.CIV.parts={cuA:cuA.clone(),hA:V3(hA),hA3:V3(hA3)};
+}
+// ---------- permanent site labels + cofactor wire traces ----------
+const annoGroup=new THREE.Group(); scene.add(annoGroup);
+let labelsOn=true;
+function siteSprite(text,color='#e8eefc'){
+  const c=document.createElement('canvas'); c.width=256; c.height=64;
+  const g=c.getContext('2d'); let fs=30;
+  g.textAlign='center'; g.textBaseline='middle';
+  do{ g.font=`700 ${fs}px ui-sans-serif,system-ui,sans-serif`; fs-=2; }while(g.measureText(text).width>228&&fs>16);
+  g.fillStyle='rgba(4,8,18,.85)'; g.strokeStyle=color; g.lineWidth=2.5;
+  g.beginPath(); g.roundRect(4,6,248,52,14); g.fill(); g.stroke();
+  g.fillStyle=color; g.fillText(text,128,33);
+  const t=new THREE.CanvasTexture(c);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthTest:false}));
+  sp.scale.set(4,1,1); sp.renderOrder=18; return sp;
+}
+const siteLabels=[];
+function site(id,local,text,color){ const sp=siteSprite(text,color);
+  sp.position.copy(CL(id,local)).add(new THREE.Vector3(0,1.9,0));
+  annoGroup.add(sp); siteLabels.push(sp); }
+function wire(id,locals,color=0x22d3ee,op=0.5){
+  const pts=locals.map(p=>CL(id,p));
+  const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints(new THREE.CatmullRomCurve3(pts).getPoints(80)),
+    new THREE.LineDashedMaterial({color,dashSize:0.55,gapSize:0.4,transparent:true,opacity:op,depthTest:false}));
+  line.computeLineDistances(); line.renderOrder=17; annoGroup.add(line); }
+{ // CI — human complex I: tip → FMN → 7 on-pathway Fe–S → Q cavity (N1a off-path)
+  const F=CX.CI.fesOrdered;
+  site('CI',CX.CI.nadh,'NADH in','#22d3ee');
+  site('CI',F[0],'FMN','#fde047');
+  F.slice(1).forEach((p,i)=>site('CI',p,'FeS·'+(i+1),'#fb923c'));
+  if(CX.CI.n1a)site('CI',CX.CI.n1a,'N1a · off-path','#94a3b8');
+  site('CI',CX.CI.q,'Q cavity','#a3e635');
+  const ndp=cofs('CI','nad')[0]; if(ndp)site('CI',ndp,'NAD(P)','#c4b5fd');
+  wire('CI',F,'#22d3ee',0.55);
+}
+{ // CII — FAD → 3 Fe–S → heme b → Qp
+  const R=CX.CII.eroute;
+  site('CII',R[0],'succinate in','#22d3ee');
+  site('CII',R[1],'FAD','#fde047');
+  R.slice(2,5).forEach((p,i)=>site('CII',p,'FeS·'+(i+1),'#fb923c'));
+  site('CII',R[5],'heme b','#f87171');
+  site('CII',R[6],'Qp','#a3e635');
+  wire('CII',R.slice(1),'#a78bfa',0.55);
+}
+{ // CIII — Qo/Qi, Rieske, c1, bL, bH
+  site('CIII',CX.CIII.qo,'Qo','#a3e635');
+  site('CIII',CX.CIII.qi,'Qi','#a3e635');
+  site('CIII',cofs('CIII','fes')[0],'Rieske','#fb923c');
+  site('CIII',CX.CIII.c1,'c₁','#f87171');
+  const lp=CX.CIII.lp;
+  site('CIII',lp[1],'bL','#f87171');
+  site('CIII',lp[2],'bH','#f87171');
+  site('CIII',CX.CIII.nadh,'→ cyt c','#f9a8d4');
+  wire('CIII',[CX.CIII.qo,cofs('CIII','fes')[0],CX.CIII.c1],'#bef264',0.5);
+  wire('CIII',lp,'#bef264',0.4);
+}
+{ // CIV — CuA, heme a, binuclear center, O2 exit
+  const P=CX.CIV.parts;
+  site('CIV',P.cuA,'CuA','#2dd4bf');
+  site('CIV',P.hA,'heme a','#f87171');
+  site('CIV',P.hA3,'a₃·CuB','#f87171');
+  site('CIV',CX.CIV.bottom,'O₂ → H₂O','#e2e8f0');
+  wire('CIV',[CX.CIV.nadh,P.cuA,P.hA,P.hA3,CX.CIV.bottom],'#f472b6',0.5);
+}
+{ // CV — F0 ring, head, ADP
+  site('CV',[0,1,0],'F₀ c-ring','#fbbf24');
+  site('CV',[0,-13,0],'α₃β₃','#fde047');
+  const adp=cofs('CV','adp')[0]; if(adp)site('CV',adp,'ADP','#fbbf24');
+}
+$('bLabels').onclick=()=>{ labelsOn=!labelsOn; annoGroup.visible=labelsOn;
+  $('bLabels').textContent=labelsOn?'🏷 Labels':'🏷 Labels off'; $('bLabels').classList.toggle('on',labelsOn); };
+// ATP synthase rotor shaft (protons spin it)
+const rotor = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,14,12),
+  new THREE.MeshStandardMaterial({color:0xfbbf24,emissive:0xfbbf24,emissiveIntensity:0.7}));
+rotor.position.set(POS.CV,-2,0); scene.add(rotor);
+
+// ---------- carriers & particles ----------
+function makePool(n, r, c1, c2, stickOx, stickRed){
+  const grp = new THREE.Group(); const items=[];
+  const g1 = new THREE.SphereGeometry(r,10,10);
+  for(let i=0;i<n;i++){
+    const m = new THREE.Mesh(g1, new THREE.MeshStandardMaterial({color:c1,emissive:c1,emissiveIntensity:0.55,roughness:0.35}));
+    m.userData={red:false,c1:new THREE.Color(c1),c2:new THREE.Color(c2)};
+    m.userData.stick=tag(m, stickOx, r*1.8);
+    m.userData.stickOx=stickOx; m.userData.stickRed=stickRed;
+    grp.add(m); items.push(m);
+  }
+  scene.add(grp); return items;
+}
+const Qs = makePool(12, 0.55, 0x475569, 0xa3e635, STICK.q, STICK.qh2);   // Q grey / QH₂ lime
+const CYs = makePool(8, 0.5, 0xef4444, 0xf9a8d4, STICK.cox, STICK.cred); // cyt c³⁺ red / c²⁺ pink
+const O2s = makePool(10, 0.42, 0xe2e8f0, 0xe2e8f0, STICK.o2, STICK.o2);
+Qs.forEach((m,i)=>{ m.position.set(-30+Math.random()*36,-0.2+Math.random()*0.4,(Math.random()-0.5)*10); });
+CYs.forEach((m,i)=>{ m.position.set(-4+Math.random()*20,3.5+Math.random()*3.5,(Math.random()-0.5)*10); });
+O2s.forEach(m=>{ m.position.set(POS.CIV-4+Math.random()*10,3+Math.random()*4,(Math.random()-0.5)*10); });
+// ---------- ambient context populations: IMS protons mirror the gradient ----------
+const imsH=[], matH=[], h2oD=[];
+{
+  const hg=new THREE.SphereGeometry(0.34,8,8);
+  for(let i=0;i<26;i++){ const m=new THREE.Mesh(hg,new THREE.MeshStandardMaterial({color:0xf472b6,emissive:0xf472b6,emissiveIntensity:0.9,roughness:0.4}));
+    tag(m,STICK.h,0.62);
+    m.position.set(-62+Math.random()*116,3+Math.random()*5,(Math.random()-0.5)*22);
+    m.userData.ph=Math.random()*7; scene.add(m); imsH.push(m); }
+  for(let i=0;i<20;i++){ const m=new THREE.Mesh(hg,new THREE.MeshStandardMaterial({color:0x9d5b7a,emissive:0x9d5b7a,emissiveIntensity:0.35,roughness:0.6}));
+    tag(m,STICK.h,0.55,0.55);
+    m.position.set(-62+Math.random()*116,-9+Math.random()*5,(Math.random()-0.5)*22);
+    m.userData.ph=Math.random()*7; scene.add(m); matH.push(m); }
+  for(let i=0;i<12;i++){ const m=new THREE.Mesh(new THREE.SphereGeometry(0.4,8,8),
+      new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xdbeafe,emissiveIntensity:0.5,roughness:0.4}));
+    tag(m,STICK.h2o,0.78);
+    m.position.set(POS.CIV-8+Math.random()*18,3+Math.random()*5,(Math.random()-0.5)*14);
+    m.userData.ph=Math.random()*7; scene.add(m); h2oD.push(m); }
+}
+function setRed(m,red){ m.userData.red=red; const c=red?m.userData.c2:m.userData.c1;
+  m.material.color.copy(c); m.material.emissive.copy(c);
+  if(m.userData.stick) m.userData.stick.material.map=red?m.userData.stickRed:m.userData.stickOx; }
+
+const trips=[];   // electron packets {mesh, path:[V3], i, speed, done}
+const eGeo = new THREE.SphereGeometry(0.62,10,10);
+const eMat = new THREE.MeshStandardMaterial({color:0x22d3ee,emissive:0x22d3ee,emissiveIntensity:1.6});
+function spawnTrip(path){ if(trips.length>40||path.length<2)return;
+  const mesh=new THREE.Mesh(eGeo,eMat); mesh.position.copy(path[0]); tag(mesh,STICK.e,0.95); scene.add(mesh);
+  trips.push({mesh,path,i:1}); }
+const puffs=[];  // proton puffs {mesh, vy, life}
+const pGeo = new THREE.SphereGeometry(0.3,8,8);
+const pMat = new THREE.MeshStandardMaterial({color:0xf472b6,emissive:0xf472b6,emissiveIntensity:1.4,transparent:true});
+const atpGeo = new THREE.SphereGeometry(0.4,8,8);
+const atpMat = new THREE.MeshStandardMaterial({color:0xbef264,emissive:0xbef264,emissiveIntensity:1.4,transparent:true});
+function spawnPuff(x,z,up=true,hex=0xf472b6,stick=STICK.h,ss=0.85){ if(puffs.length>120)return;
+  const mesh=new THREE.Mesh(pGeo,new THREE.MeshStandardMaterial({color:hex,emissive:hex,emissiveIntensity:1.4,transparent:true}));
+  mesh.position.set(x+(Math.random()-0.5)*3,up?-2.4:3.2,(Math.random()-0.5)*4);
+  tag(mesh,stick,ss); scene.add(mesh); puffs.push({mesh,vy:up?5.5:-4.5,life:1.4,atp:false}); }
+function spawnATP(){ const mesh=new THREE.Mesh(atpGeo,atpMat.clone());
+  mesh.position.set(POS.CV+(Math.random()-0.5)*3,CX.CV.bottom.y+1,(Math.random()-0.5)*3);
+  tag(mesh,STICK.atp,1.15); scene.add(mesh); puffs.push({mesh,vy:-2.2,life:2.6,atp:true}); }
+
+// routes (world coords)
+const W = id => { const g=CX[id].group.position; const l=CX[id]; return {
+  top:l.nadh.clone().add(g), q:l.q.clone().add(g), bot:l.bottom.clone().add(g) }; };
+function qZone(){ return new THREE.Vector3(-40+Math.random()*34,0,(Math.random()-0.5)*8); }
+function cytZone(){ return new THREE.Vector3(0+Math.random()*18,5,(Math.random()-0.5)*8); }
+
+// ---------- simulation ----------
+const acc={CI:0,CII:0,CIII:0,CIV:0,CV:0};
+function backpressure(){ return 1/(1+6*Math.max(0,S.grad-0.72)); }
+function step(dt){
+  const I=S.inh, bp=backpressure();
+  if(S.feed){ S.nadh=Math.min(40,S.nadh+1.6*dt); S.fadh2=Math.min(24,S.fadh2+0.9*dt); }
+  S.o2 += ((S.o2target)-S.o2)*Math.min(1,0.5*dt);
+  // CI
+  if(!I.rotenone && S.nadh>=1 && S.q>=1){
+    const VIS=!SEQ.active;
+    acc.CI+=K.CI*dt*bp*Math.min(S.nadh,S.q);
+    while(acc.CI>=1){ acc.CI--; S.nadh--; S.q--; S.qh2++; S.grad=Math.min(1,S.grad+0.016);
+      if(VIS){ spawnTrip([...LW('CI',CX.CI.eroute),qZone(),CX.CIII.qo.clone().add(CX.CIII.group.position)]);
+        spawnPuff(POS.CI,0); spawnPuff(POS.CI,0); }
+      log('CI · NADH→FMN→7×FeS→Q · +4H⁺ pumped'); }
+  }
+  // CII
+  if(!I.malonate && S.fadh2>=1 && S.q>=1){
+    const VIS=!SEQ.active;
+    acc.CII+=K.CII*dt*Math.min(S.fadh2,S.q);
+    while(acc.CII>=1){ acc.CII--; S.fadh2--; S.q--; S.qh2++;
+      if(VIS)spawnTrip([...LW('CII',CX.CII.eroute),qZone(),CX.CIII.qo.clone().add(CX.CIII.group.position)]);
+      log('CII · succinate→FAD→3×FeS→heme b→Q · no pumping'); }
+  }
+  // CIII
+  if(!I.antimycin && S.qh2>=1 && S.cox>=2){
+    const VIS=!SEQ.active;
+    acc.CIII+=K.CIII*dt*bp*Math.min(S.qh2,S.cox/2);
+    while(acc.CIII>=1){ acc.CIII--; S.qh2--; S.q++; S.cox-=2; S.cred+=2; S.grad=Math.min(1,S.grad+0.016);
+      if(VIS){ spawnTrip([...LW('CIII',CX.CIII.hp),cytZone()]);
+        spawnTrip(LW('CIII',CX.CIII.lp));
+        spawnPuff(POS.CIII,0); spawnPuff(POS.CIII,0); }
+      log('CIII · Qo→Rieske→c₁→c (+bL→bH→Qi) · +4H⁺'); }
+  }
+  // CIV
+  if(!I.cyanide && S.cred>=2 && S.o2>0.02){
+    const VIS=!SEQ.active;
+    acc.CIV+=K.CIV*dt*bp*Math.min(S.cred/2,S.o2*8);
+    while(acc.CIV>=1){ acc.CIV--; S.cred-=2; S.cox+=2; S.o2=Math.max(0,S.o2-0.02); S.grad=Math.min(1,S.grad+0.008);
+      if(VIS){ spawnTrip(LW('CIV',CX.CIV.eroute));
+        spawnPuff(POS.CIV,0);
+        spawnPuff(POS.CIV+2,0,true,0xffffff,STICK.h2o,1.0); }
+      log('CIV · c→CuA→a→a₃CuB→O₂ →H₂O · +2H⁺'); }
+  }
+  // CV
+  if(!I.oligomycin && S.grad>0.05){
+    const VIS=!SEQ.active;
+    acc.CV+=K.CV*dt*S.grad;
+    while(acc.CV>=1){ acc.CV--; S.grad=Math.max(0,S.grad-0.007); S.atp++;
+      if(VIS){ spawnATP(); spawnPuff(POS.CV,0,false); } }
+  }
+  S.grad=Math.max(0,S.grad-0.002*dt); // leak
+  // warnings
+  if(S.o2<=0.02&&!o2Warned){o2Warned=true;log('⚠ O₂ depleted — Complex IV stalled, chain backing up');toast('O₂ depleted — raise O₂ supply');}
+  if(S.o2>0.1)o2Warned=false;
+  if(S.grad>=0.99&&!gradWarned){gradWarned=true;log('⚠ Δp maxed — ATP synthase starved of ADP (or oligomycin?)');}
+  if(S.grad<0.9)gradWarned=false;
+}
+
+// ---------- HUD ----------
+function hud(){
+  $('sAtp').textContent=Math.floor(S.atp);
+  $('sNadh').textContent=Math.floor(S.nadh); $('sFadh').textContent=Math.floor(S.fadh2);
+  $('sQ').textContent=`${Math.floor(S.qh2)}/${Math.floor(S.q)}`;
+  $('sCyt').textContent=`${Math.floor(S.cred)}/${Math.floor(S.cox)}`;
+  $('sO2').textContent=Math.round(S.o2*100)+'%';
+  $('gradFill').style.width=(S.grad*100)+'%'; $('gradTxt').textContent=Math.round(S.grad*100)+'%';
+  const nQ=Math.round(S.qh2), nC=Math.round(S.cred);
+  Qs.forEach((m,i)=>setRed(m,i<nQ)); CYs.forEach((m,i)=>setRed(m,i<nC));
+  O2s.forEach(m=>{ m.visible=S.o2>0.03; });
+}
+
+// ---------- textbook figures (drawn in classic textbook style) ----------
+const SCHEMES = {
+CI:{ fig:"Fig. 1 · Complex I — NADH:ubiquinone oxidoreductase",
+cap:"<b>Figure 1.</b> L-shaped Complex I. NADH is oxidized at the tip of the peripheral arm (N-module). The flavin FMN accepts a two-electron hydride and dispatches electrons one at a time down an electrical wire of seven on-pathway Fe–S clusters (cluster N1a remains off-pathway) to ubiquinone (Q-module). Electron transfer triggers long-range electrostatic pulses through the membrane arm (P-module), pumping <b>four protons per electron pair ($2e^−$)</b> into the intermembrane space. In vivo, Complex I often associates with Complexes III and IV into a respirasome (supercomplex). Inhibited by <b>rotenone</b>.",
+svg:`<svg viewBox="0 0 460 300" style="font-family:monospace">
+<defs><marker id="ciR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#dc2626"/></marker><marker id="ciB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#1d4ed8"/></marker><marker id="ciG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#15803d"/></marker></defs>
+<rect x="0" y="0" width="460" height="86" fill="#fde8e8"/><rect x="0" y="128" width="460" height="172" fill="#e8effe"/>
+<text x="10" y="20" font-size="11" fill="#991b1b">INTERMEMBRANE SPACE (P-side)</text><text x="10" y="292" font-size="11" fill="#1e40af">MATRIX (N-side)</text>
+<line x1="0" y1="90" x2="460" y2="90" stroke="#b45309" stroke-width="2"/><line x1="0" y1="124" x2="460" y2="124" stroke="#b45309" stroke-width="2"/>
+<line x1="186" y1="176" x2="244" y2="60" stroke="#dc2626" stroke-width="2.5" marker-end="url(#ciR)"/><line x1="244" y1="176" x2="290" y2="60" stroke="#dc2626" stroke-width="2.5" marker-end="url(#ciR)"/><line x1="302" y1="176" x2="336" y2="60" stroke="#dc2626" stroke-width="2.5" marker-end="url(#ciR)"/>
+<rect x="150" y="84" width="212" height="48" rx="8" fill="#7dd3fc" stroke="#1e293b" stroke-width="2"/>
+<text x="256" y="105" font-size="12" text-anchor="middle" fill="#1e293b">P-module</text><text x="256" y="121" font-size="10" text-anchor="middle" fill="#475569">proton pumping</text>
+<rect x="150" y="132" width="52" height="122" rx="8" fill="#93c5fd" stroke="#1e293b" stroke-width="2"/>
+<text x="176" y="150" font-size="10" text-anchor="middle" fill="#1e293b">N-mod</text><text x="176" y="246" font-size="10" text-anchor="middle" fill="#1e293b">Q-mod</text>
+<circle cx="176" cy="168" r="7" fill="#fde047" stroke="#1e293b" stroke-width="1.5"/><text x="192" y="171" font-size="10">FMN</text>
+<circle cx="176" cy="196" r="5" fill="#fb923c" stroke="#1e293b"/><circle cx="176" cy="210" r="5" fill="#fb923c" stroke="#1e293b"/><circle cx="176" cy="224" r="5" fill="#fb923c" stroke="#1e293b"/><text x="192" y="213" font-size="10">7× Fe–S + N1a</text>
+<line x1="40" y1="160" x2="142" y2="160" stroke="#1d4ed8" stroke-width="2.5" marker-end="url(#ciB)"/><text x="42" y="150" font-size="11" fill="#1d4ed8">NADH → NAD⁺</text>
+<line x1="100" y1="268" x2="148" y2="220" stroke="#15803d" stroke-width="2.5" marker-end="url(#ciG)"/><text x="36" y="284" font-size="11" fill="#15803d">Q → QH₂</text>
+<line x1="186" y1="176" x2="244" y2="60" stroke="#dc2626" stroke-width="2.5" marker-end="url(#ciR)"/><line x1="244" y1="176" x2="290" y2="60" stroke="#dc2626" stroke-width="2.5" marker-end="url(#ciR)"/><line x1="302" y1="176" x2="336" y2="60" stroke="#dc2626" stroke-width="2.5" marker-end="url(#ciR)"/>
+<text x="356" y="60" font-size="12" fill="#dc2626">4 H⁺</text></svg>`},
+CII:{ fig:"Fig. 2 · Complex II — succinate dehydrogenase",
+cap:"<b>Figure 2.</b> A citric acid cycle (Krebs cycle) enzyme embedded directly in the inner membrane. Succinate oxidizes to fumarate at SDHA, transferring two electrons to FAD. The pair cascades through three Fe–S clusters (in SDHB) to reduce ubiquinone. Heme b is present near the membrane interface; rather than serving as the main electron conduit, it is thought to limit reactive oxygen species (ROS) formation and stabilize the complex. Because the redox potential difference between succinate and ubiquinone is near zero ($\Delta E^\circ \approx 0\text{ V}$), the energy drop cannot drive proton translocation (<b>0 protons pumped per electron pair</b>).",
+svg:`<svg viewBox="0 0 460 300" style="font-family:monospace">
+<defs><marker id="c2B" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#1d4ed8"/></marker><marker id="c2G" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#15803d"/></marker></defs>
+<rect x="0" y="0" width="460" height="86" fill="#fde8e8"/><rect x="0" y="128" width="460" height="172" fill="#e8effe"/>
+<text x="10" y="20" font-size="11" fill="#991b1b">INTERMEMBRANE SPACE</text><text x="10" y="292" font-size="11" fill="#1e40af">MATRIX</text>
+<line x1="0" y1="90" x2="460" y2="90" stroke="#b45309" stroke-width="2"/><line x1="0" y1="124" x2="460" y2="124" stroke="#b45309" stroke-width="2"/>
+<rect x="205" y="82" width="72" height="50" rx="8" fill="#c4b5fd" stroke="#1e293b" stroke-width="2"/><circle cx="241" cy="107" r="7" fill="#ef4444" stroke="#1e293b" stroke-width="1.5"/><text x="241" y="107" font-size="7" text-anchor="middle" fill="#fff">b</text><text x="241" y="150" font-size="10" text-anchor="middle">SDHC·SDHD</text>
+<rect x="160" y="140" width="172" height="112" rx="24" fill="#ddd6fe" stroke="#1e293b" stroke-width="2"/>
+<text x="215" y="160" font-size="11" text-anchor="middle" fill="#1e293b">SDHA · FAD</text><circle cx="215" cy="180" r="8" fill="#fde047" stroke="#1e293b" stroke-width="1.5"/>
+<text x="290" y="160" font-size="11" text-anchor="middle" fill="#1e293b">SDHB</text><circle cx="276" cy="182" r="5" fill="#fb923c" stroke="#1e293b"/><circle cx="292" cy="182" r="5" fill="#fb923c" stroke="#1e293b"/><circle cx="284" cy="197" r="5" fill="#fb923c" stroke="#1e293b"/><text x="284" y="214" font-size="10" text-anchor="middle">3× Fe–S</text>
+<line x1="40" y1="182" x2="152" y2="182" stroke="#1d4ed8" stroke-width="2.5" marker-end="url(#c2B)"/><text x="42" y="172" font-size="11" fill="#1d4ed8">succinate → fumarate</text>
+<line x1="285" y1="112" x2="345" y2="112" stroke="#15803d" stroke-width="2.5" marker-end="url(#c2G)"/><text x="292" y="100" font-size="11" fill="#15803d">Q → QH₂</text>
+<circle cx="395" cy="200" r="20" fill="none" stroke="#dc2626" stroke-width="3"/><line x1="381" y1="214" x2="409" y2="186" stroke="#dc2626" stroke-width="3"/><text x="395" y="236" font-size="11" text-anchor="middle" fill="#dc2626">pumps nothing</text></svg>`},
+CIII:{ fig:"Fig. 3 · Complex III — cytochrome bc₁ (Q-cycle)",
+cap:"<b>Figure 3.</b> The Q-cycle dimer and electron bifurcation. Quinol ($\text{QH}_2$) docks at the $\text{Q}_o$ site. Oxidation splits the electron pair: one electron travels high-potential via the mobile Rieske Fe–S protein to <b>cytochrome $c_1$</b> and onto soluble cytochrome $c$; the second electron drops low-potential through hemes $b_\text{L}$ and $b_\text{H}$ to the $\text{Q}_i$ site to partially reduce an oxidized quinone to a semiquinone. Over two turns, two electrons proceed onward to cytochrome $c$ while two matrix protons regenerate one $\text{QH}_2$. Net output: <b>four protons released into the intermembrane space per electron pair ($2e^−$)</b>. Inhibited by <b>antimycin A</b> at the $\text{Q}_i$ site.",
+svg:`<svg viewBox="0 0 460 300" style="font-family:monospace">
+<defs><marker id="c3R" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#dc2626"/></marker><marker id="c3B" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#1d4ed8"/></marker><marker id="c3G" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#15803d"/></marker></defs>
+<rect x="0" y="0" width="460" height="92" fill="#fde8e8"/><rect x="0" y="140" width="460" height="160" fill="#e8effe"/>
+<text x="10" y="20" font-size="11" fill="#991b1b">INTERMEMBRANE SPACE</text><text x="10" y="292" font-size="11" fill="#1e40af">MATRIX</text>
+<line x1="0" y1="96" x2="460" y2="96" stroke="#b45309" stroke-width="2"/><line x1="0" y1="136" x2="460" y2="136" stroke="#b45309" stroke-width="2"/>
+<rect x="130" y="92" width="100" height="48" rx="10" fill="#86efac" stroke="#1e293b" stroke-width="2"/><rect x="250" y="92" width="100" height="48" rx="10" fill="#86efac" stroke="#1e293b" stroke-width="2"/>
+<circle cx="160" cy="116" r="6" fill="#ef4444" stroke="#1e293b"/><circle cx="200" cy="116" r="6" fill="#ef4444" stroke="#1e293b"/><circle cx="280" cy="116" r="6" fill="#ef4444" stroke="#1e293b"/><circle cx="320" cy="116" r="6" fill="#ef4444" stroke="#1e293b"/><text x="240" y="152" font-size="10" text-anchor="middle">hemes b</text>
+<circle cx="180" cy="88" r="7" fill="#ef4444" stroke="#1e293b"/><circle cx="300" cy="88" r="7" fill="#ef4444" stroke="#1e293b"/><text x="356" y="92" font-size="10">cyt c₁</text>
+<path d="M300,84 C290,60 270,48 252,44" fill="none" stroke="#b45309" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#c3B)"/><circle cx="300" cy="84" r="6" fill="#fb923c" stroke="#1e293b"/><circle cx="250" cy="43" r="6" fill="#fb923c" stroke="#1e293b"/><text x="308" y="30" font-size="10" fill="#b45309">Rieske Fe–S swings</text>
+<circle cx="180" cy="40" r="12" fill="#fca5a5" stroke="#1e293b" stroke-width="2"/><text x="180" y="44" font-size="11" text-anchor="middle">c</text><line x1="180" y1="52" x2="180" y2="74" stroke="#1d4ed8" stroke-width="2.5" marker-end="url(#c3B)"/>
+<text x="40" y="66" font-size="10" fill="#1d4ed8">2 Cyt cₒₓ → red.</text>
+<line x1="40" y1="116" x2="122" y2="116" stroke="#15803d" stroke-width="2.5" marker-end="url(#c3G)"/><text x="42" y="106" font-size="11" fill="#15803d">QH₂</text>
+<line x1="358" y1="116" x2="418" y2="116" stroke="#15803d" stroke-width="2.5" marker-end="url(#c3G)"/><text x="392" y="106" font-size="11" fill="#15803d">Q</text>
+<line x1="150" y1="180" x2="150" y2="50" stroke="#dc2626" stroke-width="2.5" marker-end="url(#c3R)"/><line x1="340" y1="180" x2="340" y2="50" stroke="#dc2626" stroke-width="2.5" marker-end="url(#c3R)"/><text x="348" y="72" font-size="12" fill="#dc2626">4 H⁺</text></svg>`},
+CIV:{ fig:"Fig. 4 · Complex IV — cytochrome c oxidase",
+cap:"<b>Figure 4.</b> Cytochrome c delivers electrons one at a time to the dinuclear $\text{Cu}_A$ site, which relays them through heme $a$ into the binuclear catalytic center ($\text{heme } a_3\text{–Cu}_B$). For every <b>electron pair ($2e^−$)</b>, two protons are pumped across the membrane and two protons are taken from the matrix to reduce $1/2\ \text{O}_2$ into one $\text{H}_2\text{O}$ (or scaled to a full dioxygen: $4e^− + 4\text{H}^+_\text{matrix} + \text{O}_2 \to 2\text{H}_2\text{O}$, with four protons pumped). The binuclear cage tightly binds intermediates until reduction is complete, preventing the escape of dangerous reactive oxygen species. Inhibited by <b>cyanide ($\text{CN}^−$)</b>, <b>carbon monoxide ($\text{CO}$)</b>, and <b>azide ($\text{N}_3^−$)</b>.",
+svg:`<svg viewBox="0 0 460 300" style="font-family:monospace">
+<defs><marker id="c4R" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#dc2626"/></marker><marker id="c4B" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#1d4ed8"/></marker></defs>
+<rect x="0" y="0" width="460" height="92" fill="#fde8e8"/><rect x="0" y="140" width="460" height="160" fill="#e8effe"/>
+<text x="10" y="20" font-size="11" fill="#991b1b">INTERMEMBRANE SPACE</text><text x="10" y="292" font-size="11" fill="#1e40af">MATRIX</text>
+<line x1="0" y1="96" x2="460" y2="96" stroke="#b45309" stroke-width="2"/><line x1="0" y1="136" x2="460" y2="136" stroke="#b45309" stroke-width="2"/>
+<rect x="180" y="92" width="130" height="48" rx="10" fill="#fbcfe8" stroke="#1e293b" stroke-width="2"/><text x="200" y="112" font-size="10">I</text><text x="245" y="112" font-size="10">II</text><text x="290" y="112" font-size="10">III</text>
+<circle cx="120" cy="45" r="13" fill="#fca5a5" stroke="#1e293b" stroke-width="2"/><text x="120" y="49" font-size="12" text-anchor="middle">c</text>
+<line x1="133" y1="45" x2="196" y2="80" stroke="#1d4ed8" stroke-width="2.5" marker-end="url(#c4B)"/>
+<circle cx="208" cy="92" r="7" fill="#2dd4bf" stroke="#1e293b" stroke-width="1.5"/><text x="204" y="62" font-size="10">Cuₐ</text>
+<circle cx="240" cy="112" r="7" fill="#ef4444" stroke="#1e293b" stroke-width="1.5"/><text x="240" y="98" font-size="10">a</text>
+<line x1="215" y1="96" x2="233" y2="106" stroke="#1d4ed8" stroke-width="2" marker-end="url(#c4B)"/><line x1="247" y1="112" x2="262" y2="116" stroke="#1d4ed8" stroke-width="2" marker-end="url(#c4B)"/>
+<circle cx="272" cy="118" r="8" fill="#ef4444" stroke="#1e293b" stroke-width="2"/><circle cx="290" cy="118" r="7" fill="#2dd4bf" stroke="#1e293b" stroke-width="2"/><text x="240" y="154" font-size="10">a₃·Cu_B</text>
+<rect x="312" y="22" width="130" height="22" rx="6" fill="#1e293b"/><text x="377" y="37" font-size="10" text-anchor="middle" fill="#fca5a5">☠ CN⁻ blocks a₃·CuB</text>
+<line x1="420" y1="70" x2="300" y2="106" stroke="#1d4ed8" stroke-width="2.5" marker-end="url(#c4B)"/><text x="392" y="60" font-size="11" fill="#1d4ed8">O₂</text>
+<line x1="300" y1="130" x2="420" y2="162" stroke="#1d4ed8" stroke-width="2.5" marker-end="url(#c4B)"/><text x="380" y="180" font-size="11" fill="#1d4ed8">2 H₂O</text>
+<line x1="200" y1="190" x2="200" y2="50" stroke="#dc2626" stroke-width="2.5" marker-end="url(#c4R)"/><line x1="150" y1="190" x2="150" y2="50" stroke="#dc2626" stroke-width="2.5" marker-end="url(#c4R)"/><text x="40" y="60" font-size="12" fill="#dc2626">4 H⁺/O₂</text>
+<line x1="280" y1="230" x2="280" y2="150" stroke="#1d4ed8" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#c4B)"/><text x="288" y="200" font-size="10" fill="#1d4ed8">H⁺ → H₂O</text></svg>`},
+CV:{ fig:"Fig. 5 · Complex V — ATP synthase (rotary motor)",
+cap:"<b>Figure 5.</b> The proton-motive turbine. Protons driven by electrochemical back-pressure flow through the membrane-embedded $\text{F}_O$ domain (written with the letter O for oligomycin-sensitive), rotating the $c$-ring and attached $\gamma$-rotor shaft at speeds up to about 100 to 150 revolutions per second. This asymmetric rotation forces conformational changes within the catalytic $\alpha_3\beta_3$ hexamer ($\text{F}_1$ head), generating 3 ATP per full $360^\circ$ turn. Synthesizing and exporting one ATP costs roughly 4 protons. Jamming $\text{F}_O$ with <b>oligomycin</b> builds proton back-pressure until electron transit across the upstream respiratory complexes slows to a dead trickle.",
+svg:`<svg viewBox="0 0 460 300" style="font-family:monospace">
+<defs><marker id="c5P" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#db2777"/></marker><marker id="c5B" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#1d4ed8"/></marker><marker id="c5G" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#15803d"/></marker></defs>
+<rect x="0" y="0" width="460" height="92" fill="#fde8e8"/><rect x="0" y="140" width="460" height="160" fill="#e8effe"/>
+<text x="10" y="20" font-size="11" fill="#991b1b">INTERMEMBRANE SPACE (H⁺ high)</text><text x="10" y="292" font-size="11" fill="#1e40af">MATRIX (H⁺ low)</text>
+<line x1="0" y1="96" x2="460" y2="96" stroke="#b45309" stroke-width="2"/><line x1="0" y1="136" x2="460" y2="136" stroke="#b45309" stroke-width="2"/>
+<rect x="200" y="92" width="42" height="48" rx="6" fill="#fdba74" stroke="#1e293b" stroke-width="2"/><text x="221" y="120" font-size="11" text-anchor="middle">a</text>
+<circle cx="272" cy="116" r="26" fill="none" stroke="#1e293b" stroke-width="2.5"/><circle cx="272" cy="116" r="4" fill="#1e293b"/>
+<polygon points="245,180 200,205 200,255 245,280 290,255 290,205" fill="#fde68a" stroke="#1e293b" stroke-width="2"/><text x="245" y="246" font-size="13" text-anchor="middle" fill="#1e293b">α₃β₃</text>
+<line x1="245" y1="142" x2="245" y2="200" stroke="#1e293b" stroke-width="4"/>
+<path d="M262,200 A22,22 0 1,1 228,196" fill="none" stroke="#b45309" stroke-width="2.5" marker-end="url(#c5P)"/><text x="324" y="202" font-size="10" fill="#b45309">γ spins</text>
+<rect x="306" y="110" width="10" height="100" fill="#fed7aa" stroke="#1e293b" stroke-width="1.5"/><text x="322" y="165" font-size="10">stalk</text>
+<line x1="330" y1="40" x2="272" y2="90" stroke="#db2777" stroke-width="2.5" marker-end="url(#c5P)"/><text x="336" y="44" font-size="11" fill="#db2777">H⁺ in</text>
+<line x1="258" y1="142" x2="230" y2="196" stroke="#db2777" stroke-width="2.5" marker-end="url(#c5P)"/><text x="150" y="196" font-size="11" fill="#db2777">H⁺ out</text>
+<line x1="90" y1="230" x2="192" y2="230" stroke="#1d4ed8" stroke-width="2.5" marker-end="url(#c5B)"/><text x="92" y="220" font-size="11" fill="#1d4ed8">ADP + Pi</text>
+<line x1="298" y1="230" x2="398" y2="230" stroke="#15803d" stroke-width="2.5" marker-end="url(#c5G)"/><text x="348" y="220" font-size="11" fill="#15803d">ATP ×3/turn</text></svg>`}
+};
+const COFNAMES={flavin:'flavin',nad:'NAD(P)',fes:'Fe–S',heme:'heme',cu:'Cu',quinone:'quinone',mg:'Mg²⁺',adp:'ADP'};
+const MAPNAME={CI:'Complex I',CII:'Complex II',CIII:'Complex III',CIV:'Complex IV',CV:'ATP synthase',
+  POOL:'Q pool',CYT:'cytochrome c',GRAD:'proton gradient',MITO:'mitochondrion',ALL:'overview'};
+function setMap(id){ document.querySelectorAll('#minimap .mm-cx').forEach(g=>g.classList.remove('on'));
+  $('mm-pool').classList.remove('on'); $('mm-cyt').classList.remove('on'); $('mm-mem').classList.remove('hot');
+  if(CX[id])document.querySelector(`#minimap .mm-cx[data-seq="${id}"]`).classList.add('on');
+  else if(id==='POOL')$('mm-pool').classList.add('on');
+  else if(id==='CYT')$('mm-cyt').classList.add('on');
+  else if(id==='GRAD')$('mm-mem').classList.add('hot');
+  $('mapWhere').textContent=MAPNAME[id]||'overview';
+}
+document.querySelectorAll('#minimap .mm-cx').forEach(g=>g.addEventListener('click',()=>startSeq(g.dataset.seq)));
+let schemeId='CI';
+function openScheme(id){ schemeId=id; const c=CX[id].meta, s=SCHEMES[id];
+  $('schNo').textContent=s.fig; $('schFig').innerHTML=s.svg;
+  $('schCap').innerHTML=s.cap.replaceAll('$','');
+  $('schPdb').textContent='PDB '+c.pdb+' · '+c.organism; $('schName').textContent=c.name;
+  $('schNote').textContent=c.note; $('schRxn').textContent=c.reaction;
+  $('schSub').textContent=c.subunits+' · '+c.n_res+' residues traced as Cα backbone in the 3D view';
+  const counts={}; c.cofactors.forEach(x=>counts[x.t]=(counts[x.t]||0)+1);
+  $('schCof').innerHTML=Object.entries(counts).map(([k,v])=>`<span>${COFNAMES[k]||k} ×${v}</span>`).join('');
+  $('scheme').classList.add('open');
+}
+function closeScheme(){ $('scheme').classList.remove('open'); stopSpeak(); }
+
+// ---------- narration (built-in speech synthesis: free, offline, no keys) ----------
+const NARRATIONS = {
+CI:"Complex One: an L-shaped proton pump and the primary entry gate of the chain. N A D H docks at the peripheral arm tip, handing off a two-electron hydride. F M N takes both electrons, then dispatches them one at a time down an electrical wire of seven on-pathway iron-sulfur clusters — an eighth cluster, N-one-a, sits off-pathway — straight to a quinone waiting in the membrane. That energetic fall drives mechanical shifts that pump four protons per electron pair into the intermembrane space. In real membranes, Complex One often docks directly with Complexes Three and Four into a single respirasome supercomplex. Shut this gate with rotenone, and the chain stalls right at the start.",
+CII:"Complex Two: succinate dehydrogenase — the only citric acid cycle enzyme bolted straight into the membrane. Succinate is oxidized to fumarate on S D H A, passing two electrons through F A D, across three iron-sulfur clusters, and past a guardian heme b to reduce ubiquinone. Heme b plays a debated role, likely quenching dangerous electron leaks rather than carrying the main current. Notice what is missing: zero protons are pumped. The energy drop from succinate to quinone is nearly zero — simply not enough voltage to pump protons. Without Complex One's four protons, an electron pair from succinate or F A D H two yields only about one and a half A T P, compared to two and a half from N A D H. Malonate, a succinate lookalike, jams S D H A shut.",
+CIII:"Complex Three: cytochrome b c one — home of the Q-cycle and the master of electron bifurcation. Each quinol from the membrane pool docks at the Q-oh site and splits its electron pair along two pathways: one electron hops to the swinging Rieske iron-sulfur protein, through cytochrome c-one, and out to soluble cytochrome c; the second electron dives downward through the b hemes to the Q-eye site, recycling to rebuild another quinol using matrix protons. Per electron pair consumed, four protons are released into the intermembrane space. Lock the Q-eye site with antimycin A, and electrons jam in place, backing up the entire pool.",
+CIV:"Complex Four: cytochrome c oxidase — the catalytic finish line where oxygen is converted into water. Cytochrome c delivers electrons one by one into copper A, passing them through heme a to the binuclear center: heme a-three and copper B. There, four electrons, four matrix protons, and one oxygen molecule snap together into two harmless water molecules, while four protons are pumped across the membrane — that is two pumped protons per electron pair. The binuclear cage holds oxygen locked until reduction is complete, ensuring no toxic partial radicals escape. Cyanide, carbon monoxide, or azide clamp this center shut, halting aerobic respiration within seconds.",
+CV:"Complex Five: A T P synthase — nature's rotary generator. Protons driven by electrochemical back-pressure pour through F-oh — named with the letter O for oligomycin — spinning the c-ring and central gamma axle at speeds up to about one hundred to one hundred fifty revolutions per second. Each full rotation forces the catalytic alpha-three beta-three head through three conformations, squeezing out three fresh A T P molecules. Because synthesizing and exporting one A T P takes roughly four protons, ten protons from N A D H produce two and a half A T P, while six protons from succinate yield one and a half. Jam F-oh with oligomycin, and the proton gradient builds until extreme back-pressure slows upstream electron transport to a complete trickle."
+};
+let narrOn=true, voiceIdx=-1;
+function enVoices(){ try{ return speechSynthesis.getVoices().filter(v=>v.lang&&v.lang.toLowerCase().startsWith('en')); }catch(e){ return []; } }
+function bestVoice(vs){
+  const score=v=>(/google us english/i.test(v.name)?100:0)+(/natural/i.test(v.name)?40:0)+(/samantha|zira|aria|jenny|sonia/i.test(v.name)?30:0)+(/female/i.test(v.name)?10:0)+(/en[-_]US/i.test(v.lang)?15:0)+(/en[-_]GB/i.test(v.lang)?8:0)+(v.localService?5:0);
+  return vs.slice().sort((a,b)=>score(b)-score(a))[0]||null;
+}
+function fillVoices(){ const sel=$('vVoice'); if(!sel)return;
+  const vs=enVoices();
+  sel.innerHTML=`<option value="-1">★ Auto — best English voice</option>`+vs.map((v,i)=>`<option value="${i}">${v.name} (${v.lang})</option>`).join('');
+  sel.value=String(voiceIdx);
+  $('oVoice').textContent=vs.length?vs.length+' found':'none — silent mode';
+  if(!vs.length){ sel.disabled=true; }
+}
+function speak(id){
+  window.__etcLastSpoken=id;
+  if(!narrOn)return;
+  try{
+    if(!('speechSynthesis' in window))return;
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(NARRATIONS[id]);
+    u.rate=1.0; u.pitch=1.0;
+    const vs=enVoices();
+    const v=(voiceIdx>=0&&vs[voiceIdx])?vs[voiceIdx]:bestVoice(vs);
+    if(v)u.voice=v;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+function stopSpeak(){ try{ if('speechSynthesis' in window)speechSynthesis.cancel(); }catch(e){} }
+$('bNarr').onclick=()=>{ narrOn=!narrOn; if(!narrOn)stopSpeak();
+  $('bNarr').textContent=narrOn?'🔊 Narration ON':'🔇 Narration OFF'; $('bNarr').classList.toggle('on',narrOn); };
+$('vVoice').onchange=e=>{ voiceIdx=+e.target.value; };
+try{ fillVoices(); speechSynthesis.onvoiceschanged=fillVoices; }catch(e){}
+
+// ---------- picking + dossier ----------
+const ray=new THREE.Raycaster(), mouse=new THREE.Vector2();
+let selected='CI';
+function showDossier(id){
+  selected=id; setMap(id); const c=CX[id].meta;
+  $('dPdb').textContent='PDB '+c.pdb+' · '+c.organism;
+  $('dName').textContent=c.name; $('dNote').textContent=c.note;
+  $('dRxn').textContent=c.reaction; $('dSub').textContent=c.subunits+' · '+c.n_res+' residues traced as Cα backbone';
+  const names=COFNAMES;
+  const counts={}; c.cofactors.forEach(x=>counts[x.t]=(counts[x.t]||0)+1);
+  $('dCof').innerHTML=Object.entries(counts).map(([k,v])=>`<span>${names[k]||k} ×${v}</span>`).join('');
+  for(const k in CX) setGlow(k,(k===id)?0.4:0.06);
+}
+renderer.domElement.addEventListener('click',e=>{
+  mouse.set(e.clientX/innerWidth*2-1, -(e.clientY/innerHeight)*2+1);
+  ray.setFromCamera(mouse,camera);
+  const hit=ray.intersectObjects(pickable,false)[0];
+  if(hit&&hit.object.userData.cx){ const id=hit.object.userData.cx; showDossier(id); openScheme(id); speak(id); }
+});
+$('schSpeak').onclick=()=>speak(schemeId);
+$('schClose').onclick=closeScheme; $('schBack').onclick=closeScheme;
+$('scheme').addEventListener('click',e=>{ if(e.target.id==='scheme')closeScheme(); });
+$('schFly').onclick=()=>{ const x=POS[schemeId]; closeScheme(); flyTo(x+6,10,30,x,0,0); };
+$('schCine').onclick=()=>{ startSeq(schemeId); };
+
+// ---------- WASD fly ----------
+const keys={}; let fly=true;
+addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ closeScheme(); stopSeq(); return; }
+  keys.shift=e.shiftKey;
+  const k=e.key.toLowerCase();
+  if(k.length===1&&'wasdqe'.includes(k)){ keys[k]=true; if(fly)e.preventDefault(); }
+});
+addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; keys.shift=e.shiftKey; });
+$('bFly').onclick=()=>{ fly=!fly; $('bFly').textContent=fly?'✈ WASD fly':'WASD off'; $('bFly').classList.toggle('on',fly); };
+$('bStory').onclick=()=>{ if(SEQ.active&&SEQ.story)stopSeq(); else startStory(); };
+$('capStop').onclick=()=>stopSeq();
+// ---------- phone sheet + back button ----------
+$('sheetToggle').onclick=()=>{ const p=$('controls'), open=p.classList.toggle('open');
+  document.body.classList.toggle('sheet-open',open);
+  $('sheetChev').textContent=open?'▼':'▲'; };
+$('mPlay').onclick=()=>$('bPlay').click();
+$('mStory').onclick=()=>$('bStory').click();
+$('mStop').onclick=()=>{ stopSeq(); closeScheme(); };
+$('mBack').onclick=()=>{
+  if($('scheme').classList.contains('open')){ closeScheme(); return; }
+  if(SEQ.active){ stopSeq(); return; }
+  location.href='./index.html';
+};
+const FLY_MIN=new THREE.Vector3(-95,-28,-65), FLY_MAX=new THREE.Vector3(95,65,65);
+function flyStep(dt){
+  const f=(keys.w?1:0)-(keys.s?1:0), r=(keys.d?1:0)-(keys.a?1:0), u=(keys.e?1:0)-(keys.q?1:0);
+  if(!f&&!r&&!u)return;
+  const fwd=controls.target.clone().sub(camera.position).normalize();
+  const right=fwd.clone().cross(camera.up).normalize();
+  const v=(keys.shift?52:20)*dt;
+  const move=fwd.multiplyScalar(f*v).add(right.multiplyScalar(r*v)).add(new THREE.Vector3(0,u*v,0));
+  camera.position.add(move).clamp(FLY_MIN,FLY_MAX);
+  controls.target.add(move).clamp(FLY_MIN,FLY_MAX);
+  tween=null; try{ SEQ.cam=null; }catch(e){}
+}
+
+// ---------- camera tour ----------
+let tween=null;
+function flyTo(px,py,pz,tx,ty,tz){
+  tween={p0:camera.position.clone(),p1:new THREE.Vector3(px,py,pz),
+         t0:controls.target.clone(),t1:new THREE.Vector3(tx,ty,tz),k:0};
+  try{ if(typeof SEQ!=='undefined')SEQ.cam=null; }catch(e){}
+}
+function startDrift(p0,p1,t0,t1,dur){ tween=null;
+  SEQ.cam={p0:p0.clone(),p1:p1.clone(),t0:t0.clone(),t1:t1.clone(),t:0,dur}; }
+document.querySelectorAll('[data-cam]').forEach(b=>b.onclick=()=>{
+  const id=b.dataset.cam;
+  if(id==='all'){ stopSeq(); setMap('ALL'); flyTo(-4,32,108,-4,0,0); return; }
+  showDossier(id); startSeq(id);
+});
+
+// ---------- controls ----------
+$('bPlay').onclick=()=>{ S.playing=!S.playing; $('bPlay').textContent=S.playing?'⏸ Pause':'▶ Run';
+  const mp=$('mPlay'); if(mp)mp.textContent=S.playing?'⏸':'▶'; };
+$('bFeed').onclick=()=>{ S.feed=!S.feed; $('bFeed').textContent=S.feed?'Auto-feed ON':'Auto-feed OFF'; $('bFeed').classList.toggle('on',S.feed); };
+$('bRot').onclick=()=>{ S.rotate=!S.rotate; controls.autoRotate=S.rotate; $('bRot').classList.toggle('on',S.rotate); };
+$('rSpeed').oninput=e=>{ S.speed=+e.target.value; $('oSpeed').textContent=S.speed.toFixed(1)+'×'; };
+$('rO2').oninput=e=>{ S.o2target=+e.target.value/100; $('oO2').textContent=e.target.value+'%'; };
+$('bNadh').onclick=()=>{ S.nadh=Math.min(60,S.nadh+6); toast('+6 NADH (citric acid cycle)'); };
+$('bFadh').onclick=()=>{ S.fadh2=Math.min(40,S.fadh2+4); toast('+4 FADH₂ (citric acid cycle)'); };
+document.querySelectorAll('[data-inh]').forEach(b=>b.onclick=()=>{
+  const k=b.dataset.inh; S.inh[k]=!S.inh[k]; b.classList.toggle('blocked',S.inh[k]);
+  const msg={rotenone:'Rotenone — Complex I blocked (CII still feeds Q)',malonate:'Malonate — Complex II blocked',
+    antimycin:'Antimycin A — Complex III blocked, QH₂ piling up',cyanide:'Cyanide — Complex IV blocked, Cyt c stuck reduced',
+    oligomycin:'Oligomycin — ATP synthase jammed, Δp maxing out'}[k];
+  log((S.inh[k]?'☠ ':'✓ cleared · ')+msg); toast((S.inh[k]?'☠ ':'✓ ')+b.textContent.trim().split('\n')[0]);
+});
+
+// ---------- cinematic explainer: every phrase drives the 3D scene ----------
+function ringTexture(hex){ const c=document.createElement('canvas'); c.width=c.height=128;
+  const g=c.getContext('2d'); g.strokeStyle=hex; g.lineWidth=10;
+  g.beginPath(); g.arc(64,64,50,0,7); g.stroke();
+  const t=new THREE.CanvasTexture(c); return t; }
+const RINGS={lime:ringTexture('#bef264'),red:ringTexture('#f87171'),cyan:ringTexture('#22d3ee')};
+const marker=new THREE.Sprite(new THREE.SpriteMaterial({map:RINGS.lime,transparent:true,depthTest:false}));
+marker.renderOrder=21; marker.visible=false; scene.add(marker);
+let markerAnim=null, rotorBoostUntil=0;
+function showMarker(wpos,opt={}){ marker.material.map=RINGS[opt.color]||RINGS.lime; marker.material.needsUpdate=true;
+  marker.material.opacity=1; marker.visible=true; markerAnim={p0:wpos.clone(),p1:opt.to?opt.to.clone():null,lift:opt.lift||0,t:0,dur:opt.dur||2.6,s:opt.s||3.2}; }
+const pulses=[];
+function pulseMesh(mesh,base){ const ex=pulses.find(p=>p.mesh===mesh); if(ex){ex.t=0;return;}
+  pulses.push({mesh,t:0,base:base!==undefined?base:mesh.material.emissiveIntensity}); }
+function setGlow(id,v){ for(const m of CX[id].tubes) m.material.emissiveIntensity=v; }
+function flashComplex(id,hold=1.6){ setGlow(id,0.6);
+  laterAlways(()=>setGlow(id,(selected===id)?0.4:0.06),hold*1000); }
+function flashInhib(key){ const b=document.querySelector(`[data-inh="${key}"]`); if(!b)return;
+  b.classList.add('hit'); laterAlways(()=>b.classList.remove('hit'),3200);
+  const box=b.closest('.panel');
+  if(box){ const br=box.getBoundingClientRect(), r=b.getBoundingClientRect();
+    if(r.top<br.top+40||r.bottom>br.bottom-10)
+      box.scrollTo({top:box.scrollTop+(r.top-br.top)-box.clientHeight/2,behavior:'smooth'}); } }
+// ---------- surgical spotlight: light only the narrated region ----------
+function flashAt(id,local){ let best=null,bd=1e9; const v=V3(local);
+  for(const o of CX[id].cofMeshes){ const d=V3(o.p).distanceToSquared(v); if(d<bd){bd=d;best=o;} }
+  if(best&&bd<0.09)pulseMesh(best.mesh,0.9); }
+function flashCof(id,pred,stepMs=130){ CX[id].cofMeshes.filter(pred).forEach((o,i)=>later(()=>pulseMesh(o.mesh,0.9),i*stepMs)); }
+let SPOT=null;
+function saveMat(sv,m){ if(!sv.has(m))sv.set(m,{o:m.opacity,t:m.transparent,e:m.emissiveIntensity,d:m.depthWrite}); }
+function unspotlight(){ if(!SPOT)return;
+  for(const [m,s] of SPOT.sv){ m.opacity=s.o; m.transparent=s.t; m.emissiveIntensity=s.e; m.depthWrite=s.d; }
+  SPOT=null; }
+// light only chains within `radius` nm of a local center; dim the rest + other complexes
+function spotlight(id,center,radius,hot=0.75){
+  unspotlight();
+  const sv=new Map(); const c=Array.isArray(center)?V3(center):center.clone();
+  for(const m of CX[id].tubes){ saveMat(sv,m.material);
+    const pts=m.userData.pts||[]; let near=false;
+    for(let i=0;i<pts.length;i+=3){ const p=pts[i];
+      const dx=p[0]-c.x,dy=p[1]-c.y,dz=p[2]-c.z;
+      if(dx*dx+dy*dy+dz*dz<radius*radius){ near=true; break; } }
+    if(near){ m.material.emissiveIntensity=hot; }
+    else { m.material.transparent=true; m.material.opacity=0.10; m.material.emissiveIntensity=0.0; m.material.depthWrite=false; }
+  }
+  for(const k in CX){ if(k===id)continue;
+    for(const m of CX[k].tubes){ saveMat(sv,m.material);
+      m.material.transparent=true; m.material.opacity=0.12; m.material.emissiveIntensity=0.0; m.material.depthWrite=false; } }
+  SPOT={sv};
+}
+// animated flow line with traveling pulses + direction cone
+const flows=[];
+function flowLine(worldPts,color=0x22d3ee,dur=3.2){
+  const v=worldPts.map(p=>p.clone());
+  const curve=new THREE.CatmullRomCurve3(v);
+  const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(60)),
+    new THREE.LineBasicMaterial({color,transparent:true,opacity:0.45,depthTest:false}));
+  line.renderOrder=19; scene.add(line);
+  const ps=[]; const pst=(color===0xa3e635||color===0xbef264)?STICK.qh2:STICK.e;
+  for(let k=0;k<3;k++){ const m=new THREE.Mesh(eGeo,new THREE.MeshBasicMaterial({color,transparent:true,depthTest:false}));
+    m.renderOrder=19; tag(m,pst,1.0); scene.add(m); ps.push(m); }
+  const cone=new THREE.Mesh(new THREE.ConeGeometry(0.38,1.0,10),
+    new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.95,depthTest:false}));
+  cone.position.copy(v[v.length-1]);
+  cone.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),curve.getTangentAt(1));
+  cone.renderOrder=19; scene.add(cone);
+  flows.push({curve,line,ps,cone,t:0,dur});
+}
+function clearFlows(){ for(const f of flows){ scene.remove(f.line); scene.remove(f.cone); f.ps.forEach(p=>scene.remove(p));
+    f.line.geometry.dispose(); f.line.material.dispose(); f.cone.geometry.dispose(); f.cone.material.dispose();
+    f.ps.forEach(p=>{p.geometry.dispose();p.material.dispose();}); } flows.length=0; }
+// floating 3D action label
+const beatLabels=[];
+function beatLabel(text,wpos,color='#bef264',dur=3.4){
+  const c=document.createElement('canvas'); c.width=512; c.height=112;
+  const g=c.getContext('2d'); let fs=40;
+  g.textAlign='center'; g.textBaseline='middle';
+  do{ g.font=`700 ${fs}px ui-sans-serif,system-ui,sans-serif`; fs-=2; }while(g.measureText(text).width>472&&fs>20);
+  g.fillStyle='rgba(4,8,18,.9)'; g.strokeStyle=color; g.lineWidth=3;
+  g.beginPath(); g.roundRect(6,14,500,84,20); g.fill(); g.stroke();
+  g.fillStyle=color; g.fillText(text,256,58);
+  const t=new THREE.CanvasTexture(c);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthTest:false}));
+  sp.scale.set(11,2.4,1); sp.position.copy(wpos).add(new THREE.Vector3(0,3.2,0)); sp.renderOrder=22;
+  scene.add(sp); beatLabels.push({sp,t:0,dur});
+}
+function clearLabels(){ for(const l of beatLabels){ scene.remove(l.sp); l.sp.material.map.dispose(); l.sp.material.dispose(); } beatLabels.length=0; }
+// rising/falling proton arrows (shaft + head)
+const harrows=[];
+function hArrowMesh(x,down=false){
+  const grp=new THREE.Group();
+  const mat=new THREE.MeshBasicMaterial({color:0xf472b6,transparent:true,opacity:0.95,depthTest:false});
+  const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.22,6,8),mat); shaft.renderOrder=19;
+  const head=new THREE.Mesh(new THREE.ConeGeometry(0.62,1.6,10),mat); head.renderOrder=19;
+  if(!down)head.position.y=3.8; else { head.position.y=-3.8; head.rotation.x=Math.PI; }
+  grp.add(shaft,head); tag(shaft,STICK.h,1.35); grp.position.set(x,-0.5,0); scene.add(grp);
+  harrows.push({grp,t:0,dur:2.6,down});
+}
+function arrowBurst(x,n,down=false){ for(let i=0;i<n;i++)later(()=>hArrowMesh(x+(Math.random()-0.5)*4,down),i*280); }
+function clearArrows(){ for(const a of harrows){ scene.remove(a.grp);
+    a.grp.children.forEach(m=>{m.geometry.dispose();m.material.dispose();}); } harrows.length=0; }
+function tourCam(id){ const x=POS[id]; flyTo(x+6,10,30,x,0,0); }
+function focusCam(id,local,dist=15,h=8){ const w=CL(id,local);
+  const d=camera.position.clone().sub(controls.target); d.y=0; if(d.lengthSq()<1)d.set(0,0,1); d.normalize();
+  flyTo(w.x+d.x*dist,w.y+h,w.z+d.z*dist,w.x,w.y,w.z); }
+function eLeg(pts){ spawnTrip(pts); }
+function hBurst(x,n,down=false){ for(let i=0;i<n;i++)later(()=>spawnPuff(x+(Math.random()-0.5)*4,0,!down),i*260); }
+
+const SEQ={active:false,timers:[],id:null,beats:[],i:0};
+function later(fn,ms){ const h=setTimeout(()=>{ if(SEQ.active)fn(); },ms); SEQ.timers.push(h); }
+function laterAlways(fn,ms){ const h=setTimeout(fn,ms); SEQ.timers.push(h); }
+function stopSeq(){ SEQ.active=false; SEQ.cam=null; SEQ.timers.forEach(clearTimeout); SEQ.timers=[];
+  try{ if('speechSynthesis' in window)speechSynthesis.cancel(); }catch(e){}
+  for(const p of pulses){ p.mesh.material.emissiveIntensity=p.base; p.mesh.scale.set(1,1,1); }
+  pulses.length=0; marker.visible=false; markerAnim=null;
+  unspotlight(); clearFlows(); clearLabels(); clearArrows();
+  document.querySelectorAll('.inhib .btn.hit').forEach(x=>x.classList.remove('hit'));
+  for(const k in CX) setGlow(k,(selected===k)?0.4:0.06);
+  $('caption').classList.remove('show'); document.body.classList.remove('cine');
+  if(!mitoManual){ mitoGroup.visible=false;
+    const bm=$('bMito'); if(bm){ bm.textContent='🔍 Mitochondrion'; bm.classList.remove('on'); } }
+  const bs=$('bStory'); if(bs)bs.textContent='▶ Full chain story'; }
+function showCaption(who,kick,text,i,n){ $('capKick').textContent=`EXPLAINING ${who} · ${i+1}/${n} · ${kick}`;
+  $('capText').textContent=text;
+  $('capDots').textContent=n>12?`${i+1} / ${n}`:'●'.repeat(i+1)+'○'.repeat(n-i-1);
+  $('caption').classList.add('show'); document.body.classList.add('cine'); }
+function ttsReady(){ try{ return narrOn&&('speechSynthesis' in window)&&enVoices().length>0; }catch(e){ return false; } }
+function armVoice(u){ u.rate=1.0; u.pitch=1.0;
+  const vs=enVoices(); const v=(voiceIdx>=0&&vs[voiceIdx])?vs[voiceIdx]:bestVoice(vs); if(v)u.voice=v; }
+function nextBeat(){ if(!SEQ.active)return;
+  if(SEQ.i>=SEQ.beats.length){ const done=SEQ.story?'FULL CHAIN':('Complex '+SEQ.id); stopSeq(); toast(`${done} explained ✓ — press anything to replay`); return; }
+  // retire previous beat's callouts fast so phrases never visually overlap
+  for(const l of beatLabels) l.dur=Math.min(l.dur,l.t+0.5);
+  marker.visible=false; markerAnim=null; SEQ.cam=null;
+  const b=SEQ.beats[SEQ.i];
+  if(b.cx&&SEQ.shown!==b.cx){ SEQ.shown=b.cx; showDossier(b.cx); }
+  showCaption(b.who||b.cx||SEQ.id,b.kick,b.text,SEQ.i,SEQ.beats.length);
+  try{ b.run(); }catch(e){ console.warn('beat',e); }
+  if(ttsReady()){
+    try{ const u=new SpeechSynthesisUtterance(b.text); armVoice(u);
+      u.onend=()=>{ if(SEQ.active){ SEQ.i++; laterAlways(()=>nextBeat(),350); } };
+      u.onerror=()=>{ if(SEQ.active){ SEQ.i++; laterAlways(()=>nextBeat(),350); } };
+      speechSynthesis.cancel(); speechSynthesis.speak(u);
+    }catch(e){ SEQ.i++; later(()=>nextBeat(),estDur(b.text)); }
+  } else { SEQ.i++; later(()=>nextBeat(),estDur(b.text)); }
+}
+function estDur(t){ return Math.max(2600, t.split(/\s+/).length*460+900); }
+function startSeq(id){ stopSeq(); closeScheme(); showDossier(id);
+  SEQ.active=true; SEQ.id=id; SEQ.story=false; SEQ.shown=id;
+  SEQ.beats=SEQUENCES[id].map(b=>Object.assign({cx:id,who:id},b)); SEQ.i=0;
+  log(`▶ explaining ${id} — captions below, ✕ to stop`);
+  nextBeat(); }
+function startStory(){ stopSeq(); closeScheme();
+  const beats=[];
+  beats.push({cx:null,who:'MITOCHONDRION',kick:'where we are',text:'It all happens inside a mitochondrion. Zooming to one patch of its folded inner membrane.',
+    run(){ mitoGroup.visible=true; setMap('MITO'); flyTo(0,16,562, 0,0,430); }});
+  beats.push({cx:null,who:'INNER MEMBRANE',kick:'the dive',text:'Down through the outer membrane, onto the cristae — this exact patch. Everything else falls away.',
+    run(){ setMap('CI'); flyTo(-46+6,10,30,-46,0,0);
+      later(()=>{ mitoGroup.visible=false; },900); }});
+  SEQUENCES.CI.forEach(b=>beats.push(Object.assign({cx:'CI',who:'CI'},b)));
+  beats.push({cx:null,who:'Q POOL',kick:'shared pool',text:'The two main doors pour into one shared pool: quinol, diffusing laterally within the inner membrane. Smaller feeders join in — and in real membranes, Complexes I, III and IV often dock into a respirasome, passing quinol hand-to-hand.',
+    run(){ unspotlight(); setMap('POOL'); const mx=(POS.CI+POS.CII)/2+4;
+      flyTo(mx,13,46,mx-6,0,0); beatLabel('QH₂ pool',new THREE.Vector3(mx-6,5,0)); }});
+  SEQUENCES.CII.forEach(b=>beats.push(Object.assign({cx:'CII',who:'CII'},b)));
+  beats.push({cx:null,who:'Q POOL',kick:'quinol crosses',text:'Loaded quinol diffuses through the membrane to Complex Three.',
+    run(){ unspotlight(); setMap('POOL'); const z=CX.CIII.qo.clone().add(CX.CIII.group.position);
+      const mx=(POS.CII+POS.CIII)/2; flyTo(mx,10,40,mx,0,0);
+      flowLine([new THREE.Vector3(-26,0,0),z],0xa3e635,4); beatLabel('QH₂ → CIII',z); }});
+  SEQUENCES.CIII.forEach(b=>beats.push(Object.assign({cx:'CIII',who:'CIII'},b)));
+  beats.push({cx:null,who:'CYT C',kick:'cytochrome c ferry',text:'Cytochrome c ferries the electron across the outer surface of the membrane.',
+    run(){ unspotlight(); setMap('CYT'); const a=CX.CIII.nadh.clone().add(CX.CIII.group.position);
+      const z=CX.CIV.parts.cuA.clone().add(CX.CIV.group.position);
+      const mx=(POS.CIII+POS.CIV)/2; flyTo(mx,12,42,mx,4,0);
+      flowLine([a,z],0xf9a8d4,4); beatLabel('cyt c ferry',new THREE.Vector3(mx,9,0)); }});
+  SEQUENCES.CIV.forEach(b=>beats.push(Object.assign({cx:'CIV',who:'CIV'},b)));
+  beats.push({cx:null,who:'Δp',kick:'pressure builds',text:'As electrons cascade down the energy ladder, protons pile up outside. This proton-motive gradient is the cellular battery.',
+    run(){ unspotlight(); setMap('GRAD'); flyTo(-4,34,115,-4,0,0);
+      beatLabel('Δp builds',new THREE.Vector3(-4,11,0));
+      arrowBurst(POS.CIII,3); arrowBurst(POS.CIV,3); hBurst(POS.CIII,3); hBurst(POS.CIV,3); }});
+  SEQUENCES.CV.forEach(b=>beats.push(Object.assign({cx:'CV',who:'CV'},b)));
+  beats.push({cx:'CV',who:'FULL CHAIN',kick:'the whole chain',text:'NADH, succinate, and oxygen in; water and ATP out. Together with ATP synthase, that is oxidative phosphorylation.',
+    run(){ unspotlight(); setMap('ALL'); flyTo(-4,32,108,-4,0,0); }});
+  SEQ.active=true; SEQ.id='FULL'; SEQ.story=true; SEQ.shown=null; SEQ.beats=beats; SEQ.i=0;
+  $('bStory').textContent='■ Stop story';
+  log('▶ FULL CHAIN STORY · hands-free · captions below, ✕ to stop');
+  nextBeat(); }
+
+const SEQUENCES={
+CI:[
+ {kick:"the gate",text:"Complex One. An L-shaped proton pump, and the primary entry gate of the chain.",
+  run(){ unspotlight(); tourCam('CI'); flashComplex('CI'); }},
+ {kick:"NADH docks",text:"NADH docks at the tip of the peripheral arm, dropping off a high-energy hydride with two electrons.",
+  run(){ const t=CX.CI.nadh, w=CL('CI',t); focusCam('CI',t);
+    spotlight('CI',t,4.5); showMarker(w,{s:3.2}); beatLabel('NADH → NAD⁺ + 2e⁻',w);
+    flowLine([w.clone(),w.clone().add(new THREE.Vector3(0,1.6,0))],0x22d3ee,2.2); }},
+ {kick:"FMN accepts",text:"First stop: FMN — the flavin that takes the two-electron hydride and hands electrons off one at a time.",
+  run(){ const f=CX.CI.fesOrdered[0], fw=CL('CI',f); focusCam('CI',f);
+    spotlight('CI',f,3.6); flashCof('CI',o=>o.t==='flavin');
+    flowLine([CL('CI',CX.CI.nadh),fw]); beatLabel('FMN · splits the pair',fw); }},
+ {kick:"iron–sulfur wire",text:"Down a bucket brigade of seven on-pathway iron–sulfur clusters to the membrane (an eighth sits off-pathway).",
+  run(){ const F=CX.CI.fesOrdered, mw=CL('CI',F[4]);
+    beatLabel('7× Fe–S wire',mw);
+    if(CX.CI.n1a)later(()=>flashAt('CI',CX.CI.n1a),60);
+    flowLine([CL('CI',CX.CI.nadh),...F.map(p=>CL('CI',p)),CL('CI',CX.CI.q)],0x22d3ee,5.2);
+    F.forEach((p,i)=>later(()=>{ unspotlight(); spotlight('CI',p,3.4); flashAt('CI',p); },i*480));
+    const d=camera.position.clone().sub(controls.target); d.y=0; if(d.lengthSq()<1)d.set(0,0,1); d.normalize();
+    const tW=CL('CI',CX.CI.nadh), qW=CL('CI',CX.CI.q);
+    startDrift(tW.clone().addScaledVector(d,19).add(new THREE.Vector3(0,7,0)),
+               qW.clone().addScaledVector(d,17).add(new THREE.Vector3(0,6,0)),tW,qW,5.4); }},
+ {kick:"quinone + pumping",text:"Quinone is reduced to quinol — and the released redox energy pumps four protons per electron pair into the intermembrane space. Rotenone jams this gate shut.",
+  run(){ const q=CL('CI',CX.CI.q), qo3=CX.CIII.qo.clone().add(CX.CIII.group.position);
+    focusCam('CI',CX.CI.q,17,6); spotlight('CI',CX.CI.q,4.5); showMarker(q,{s:3.4});
+    flowLine([q.clone(),qZone(),qo3],0xa3e635,3.4); beatLabel('Q → QH₂ · 4 H⁺ pumped',q);
+    hBurst(POS.CI,4); arrowBurst(POS.CI,3); flashInhib('rotenone'); }}
+],
+CII:[
+ {kick:"Krebs in the membrane",text:"Complex Two. Succinate dehydrogenase — a citric acid cycle (Krebs cycle) enzyme bolted directly into the membrane.",
+  run(){ unspotlight(); tourCam('CII'); flashComplex('CII'); }},
+ {kick:"succinate → FAD",text:"Succinate oxidizes to fumarate, handing its electron pair to FAD on SDHA.",
+  run(){ const t=CX.CII.nadh, fad=cofs('CII','flavin')[0], fw=CL('CII',fad);
+    focusCam('CII',fad); spotlight('CII',fad,3.6); flashCof('CII',o=>o.t==='flavin');
+    flowLine([CL('CII',t),fw]); beatLabel('FAD · from succinate',fw); showMarker(fw,{s:2.8}); }},
+ {kick:"Fe–S trio",text:"Down through a relay of three iron–sulfur clusters toward the membrane interior.",
+  run(){ const R=CX.CII.eroute, mw=CL('CII',R[3]);
+    beatLabel('3× Fe–S relay',mw);
+    flowLine(R.slice(1,5).map(p=>CL('CII',p)),0x22d3ee,3.6);
+    R.slice(2,5).forEach((p,i)=>later(()=>{ unspotlight(); spotlight('CII',p,3.2); flashAt('CII',p); },i*450));
+    const d=camera.position.clone().sub(controls.target); d.y=0; if(d.lengthSq()<1)d.set(0,0,1); d.normalize();
+    const tW=CL('CII',R[1]), uW=CL('CII',R[4]);
+    startDrift(tW.clone().addScaledVector(d,15).add(new THREE.Vector3(0,6,0)),
+               uW.clone().addScaledVector(d,14).add(new THREE.Vector3(0,5,0)),tW,uW,4.2); }},
+ {kick:"heme b → quinone",text:"Past heme b — which guards against electron leaks — and onto quinone waiting in its pocket.",
+  run(){ const R=CX.CII.eroute, uw=CL('CII',R[6]); focusCam('CII',R[6]);
+    spotlight('CII',R[6],3.6); flashCof('CII',o=>o.t==='heme'||o.t==='quinone');
+    flowLine([CL('CII',R[5]),uw,qZone()],0xa3e635,3); beatLabel('heme b → Q pool',uw); }},
+ {kick:"pumps nothing",text:"Zero protons pumped. Succinate-to-quinone energy drop is nearly zero — too small to drive proton pumping. Malonate, a succinate lookalike, can jam SDHA shut.",
+  run(){ const aw=new THREE.Vector3(POS.CII,0,0); focusCam('CII',[0,0,0],18,4);
+    spotlight('CII',cofs('CII','heme')[0],5); showMarker(aw,{color:'red',s:4});
+    beatLabel('no H⁺ pumping',aw,'#f87171'); flashInhib('malonate'); }}
+],
+CIII:[
+ {kick:"the dimer",text:"Complex Three. A twin dimer running the Q-cycle — the masterclass of electron bifurcation.",
+  run(){ unspotlight(); tourCam('CIII'); flashComplex('CIII'); }},
+ {kick:"quinol arrives",text:"A quinol arrives from the pool and docks at the Qo site facing the intermembrane space.",
+  run(){ const qo=CL('CIII',CX.CIII.qo); focusCam('CIII',CX.CIII.qo);
+    spotlight('CIII',CX.CIII.qo,4); showMarker(qo,{s:3});
+    flowLine([qZone(),qo],0xa3e635,2.6); beatLabel('QH₂ docks at Qo',qo); }},
+ {kick:"the split",text:"Split! Electron bifurcation routes one electron to the swinging Rieske protein and cytochrome c-one.",
+  run(){ const Fl=cofs('CIII','fes')[0], F=CL('CIII',Fl), c1=CL('CIII',CX.CIII.c1);
+    focusCam('CIII',Fl); spotlight('CIII',Fl,3.6);
+    flashCof('CIII',o=>o.t==='fes'); showMarker(F,{to:c1,lift:4,dur:2.4,s:2.6});
+    flowLine([CL('CIII',CX.CIII.qo),F,c1]); beatLabel('Rieske swings ↑',c1); }},
+ {kick:"cytochrome c leaves",text:"Cytochrome c takes that first electron and embarks toward Complex Four.",
+  run(){ const c1=CL('CIII',CX.CIII.c1), top=CL('CIII',CX.CIII.nadh);
+    focusCam('CIII',CX.CIII.nadh); spotlight('CIII',CX.CIII.nadh,4);
+    flowLine([c1,top,cytZone()]); beatLabel('cyt c → Complex IV',top); flashCof('CIII',o=>o.rn==='HEC'); }},
+ {kick:"the recycler",text:"The second electron dives through the b-hemes to Qi, recycling to regenerate a quinol using matrix protons.",
+  run(){ const lp=CX.CIII.lp, mid=lp[1].clone().add(lp[2]).multiplyScalar(0.5);
+    focusCam('CIII',mid,18,7); spotlight('CIII',mid,4.5);
+    flowLine(LW('CIII',lp)); beatLabel('bL → bH → Qi',CL('CIII',mid)); flashCof('CIII',o=>o.rn==='HEM',200); }},
+ {kick:"four protons",text:"Net release: four protons released into the intermembrane space per electron pair. Antimycin A locks the Qi site.",
+  run(){ arrowBurst(POS.CIII,4); hBurst(POS.CIII,4);
+    beatLabel('4 H⁺ · Q-cycle',new THREE.Vector3(POS.CIII,7,0)); flashInhib('antimycin'); }}
+],
+CIV:[
+ {kick:"where oxygen dies",text:"Complex Four. Cytochrome c oxidase — where oxygen is safely reduced into water.",
+  run(){ unspotlight(); tourCam('CIV'); flashComplex('CIV'); }},
+ {kick:"copper A",text:"Cytochrome c delivers electrons one by one to copper A, perched at the outer face.",
+  run(){ const p=CX.CIV.parts.cuA, w=CL('CIV',p); focusCam('CIV',p);
+    spotlight('CIV',p,3.6); showMarker(w,{color:'cyan'}); flashAt('CIV',p);
+    flowLine([cytZone(),w]); beatLabel('Cuₐ accepts',w,'#22d3ee'); }},
+ {kick:"heme a",text:"Through heme a — channeling electrons deeper into the catalytic heart.",
+  run(){ const p=CX.CIV.parts, a=CL('CIV',p.cuA), b=CL('CIV',p.hA);
+    focusCam('CIV',p.hA); spotlight('CIV',p.hA,3.2); flashAt('CIV',p.hA);
+    flowLine([a,b]); beatLabel('heme a',b); }},
+ {kick:"binuclear center",text:"Four electrons, four protons, two waters at the heme a-three/copper B trap — locked down so no toxic oxygen radicals escape.",
+  run(){ const p=CX.CIV.parts, b=CL('CIV',p.hA3); focusCam('CIV',p.hA3,14,6);
+    spotlight('CIV',p.hA3,3.2); flashAt('CIV',p.hA3); showMarker(b,{s:3.2});
+    flowLine([CL('CIV',p.hA),b]); beatLabel('a₃·CuB + O₂',b); }},
+ {kick:"water is born",text:"Two waters roll free — the cage never lets a half-reduced radical escape.",
+  run(){ spawnPuff(POS.CIV+2,0,true,0xffffff,STICK.h2o,1.1);
+    spawnPuff(POS.CIV-2,0,true,0xffffff,STICK.h2o,1.0);
+    later(()=>spawnPuff(POS.CIV,0,true,0xffffff,STICK.h2o,1.0),400);
+    hBurst(POS.CIV,2); arrowBurst(POS.CIV,2);
+    beatLabel('2 H₂O born',new THREE.Vector3(POS.CIV+2,6,0)); }},
+ {kick:"cyanide",text:"Cyanide — or carbon monoxide, or azide — clamps this center shut, halting aerobic respiration within seconds.",
+  run(){ const b=CL('CIV',CX.CIV.parts.hA3);
+    spotlight('CIV',CX.CIV.parts.hA3,3.5);
+    showMarker(b,{color:'red',s:4,dur:3}); beatLabel('CN⁻ kills here',b,'#f87171'); flashInhib('cyanide'); }}
+],
+CV:[
+ {kick:"rotary motor",text:"Complex Five. ATP synthase — nature's rotary generator.",
+  run(){ unspotlight(); tourCam('CV'); flashComplex('CV'); }},
+ {kick:"protons rain down",text:"Protons driven by back-pressure pour through F-oh — O for oligomycin — turning their fall into spin.",
+  run(){ const f0=new THREE.Vector3(POS.CV,0,0); focusCam('CV',[0,0,0],20,6);
+    spotlight('CV',[0,0,0],5); showMarker(f0,{color:'cyan'});
+    beatLabel('H⁺ through F₀',f0);
+    for(let i=0;i<6;i++)later(()=>spawnPuff(POS.CV,0,false),i*300);
+    arrowBurst(POS.CV,4,true); }},
+ {kick:"spin up",text:"The c-ring and gamma shaft spin up — up to a hundred and fifty turns a second.",
+  run(){ rotorBoostUntil=performance.now()+4500;
+    spotlight('CV',[0,-10,0],9);
+    beatLabel('γ spins · ≤150/s',new THREE.Vector3(POS.CV,-10,0));
+    focusCam('CV',[0,-8,0],24,10); }},
+ {kick:"three ATP",text:"Each full turn squeezes three fresh ATP out of the head — at roughly four protons apiece.",
+  run(){ spotlight('CV',[0,-13,0],8); flashCof('CV',o=>o.t==='adp');
+    for(let i=0;i<3;i++)later(()=>spawnATP(),i*450);
+    beatLabel('3 ATP / turn',new THREE.Vector3(POS.CV,-13,0)); }},
+ {kick:"oligomycin",text:"Oligomycin jams F-oh — and back-pressure slows the whole chain to a trickle.",
+  run(){ const f0=new THREE.Vector3(POS.CV,0,0); spotlight('CV',[0,0,0],5);
+    showMarker(f0,{color:'red',s:4,dur:3}); beatLabel('oligomycin jams F₀',f0,'#f87171'); flashInhib('oligomycin'); }}
+]
+};
+
+// ---------- main loop ----------
+const clock=new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(0.05,clock.getDelta());
+  if(S.playing)step(dt*S.speed);
+  // trips
+  for(let i=trips.length-1;i>=0;i--){ const t=trips[i];
+    const b=t.path[t.i];
+    if(!b){ scene.remove(t.mesh); trips.splice(i,1); continue; }
+    const dist=t.mesh.position.distanceTo(b), v=14*dt*(S.playing?S.speed:1)+0.12;
+    if(dist<=v){ t.mesh.position.copy(b); t.i++; }
+    else t.mesh.position.add(b.clone().sub(t.mesh.position).normalize().multiplyScalar(v));
+  }
+  // puffs
+  for(let i=puffs.length-1;i>=0;i--){ const p=puffs[i];
+    p.life-=dt; p.mesh.position.y+=p.vy*dt;
+    p.mesh.material.opacity=Math.min(1,p.life);
+    if(p.life<=0){ scene.remove(p.mesh); puffs.splice(i,1); } }
+  // carriers drift
+  const t=performance.now()/1000;
+  Qs.forEach((m,i)=>{ m.position.x+=Math.sin(t*0.7+i*2.1)*0.008; m.position.z+=Math.cos(t*0.5+i)*0.008; });
+  CYs.forEach((m,i)=>{ m.position.x+=Math.sin(t*0.6+i*1.7)*0.01; m.position.y+=Math.cos(t*0.9+i)*0.006; });
+  O2s.forEach((m,i)=>{ m.position.y+=Math.sin(t+i)*0.004; m.position.x+=0.01; if(m.position.x>POS.CIV+8)m.position.x=POS.CIV-6; });
+  // ambient economy: IMS protons mirror Δp, matrix holds the reservoir, water drifts by CIV
+  const showH=Math.round(2+S.grad*24);
+  imsH.forEach((m,i)=>{ m.visible=i<showH;
+    m.position.y+=Math.sin(t*1.2+m.userData.ph)*0.004; m.position.x+=Math.cos(t*0.5+m.userData.ph)*0.005; });
+  matH.forEach(m=>{ m.position.y+=Math.sin(t+m.userData.ph)*0.003; });
+  h2oD.forEach(m=>{ m.position.x+=0.008; m.position.y+=Math.sin(t*0.8+m.userData.ph)*0.005;
+    if(m.position.x>POS.CIV+12)m.position.x=POS.CIV-10; });
+  if(mitoGroup.visible){ const pp=mitoGroup.userData.patch, s=1+0.12*Math.sin(performance.now()/400);
+    pp.scale.set(s,s,1); }
+  rotor.rotation.y += dt*(0.5+S.grad*14*(S.inh.oligomycin?0:1)+(performance.now()<rotorBoostUntil?32:0));
+  // cofactor pulses
+  for(let i=pulses.length-1;i>=0;i--){ const p=pulses[i]; p.t+=dt;
+    const k=Math.exp(-2.4*p.t);
+    p.mesh.material.emissiveIntensity=p.base+2.4*k;
+    const s=1+0.4*k; p.mesh.scale.set(s,s,s);
+    if(p.t>1.8){ p.mesh.material.emissiveIntensity=p.base; p.mesh.scale.set(1,1,1); pulses.splice(i,1); } }
+  // callout marker
+  if(markerAnim){ markerAnim.t+=dt; const k=Math.min(1,markerAnim.t/markerAnim.dur);
+    if(markerAnim.p1){ marker.position.lerpVectors(markerAnim.p0,markerAnim.p1,k);
+      marker.position.y+=Math.sin(k*Math.PI)*markerAnim.lift; }
+    else marker.position.copy(markerAnim.p0);
+    const s=markerAnim.s*(1+0.22*Math.sin(markerAnim.t*10));
+    marker.scale.set(s,s,1);
+    marker.material.opacity=k>0.75?(1-k)*4:1;
+    if(k>=1){ marker.visible=false; markerAnim=null; } }
+  // flow lines
+  for(let i=flows.length-1;i>=0;i--){ const f=flows[i]; f.t+=dt; const k=f.t/f.dur;
+    f.ps.forEach((p,j)=>{ const u=(k*1.1+j/3)%1; p.position.copy(f.curve.getPointAt(u)); });
+    const fade=k>0.8?(1-k)*5:1;
+    f.line.material.opacity=0.45*fade; f.cone.material.opacity=0.95*fade;
+    f.ps.forEach(p=>p.material.opacity=fade);
+    if(k>=1){ scene.remove(f.line); scene.remove(f.cone); f.ps.forEach(p=>scene.remove(p));
+      f.line.geometry.dispose(); f.line.material.dispose(); f.cone.geometry.dispose(); f.cone.material.dispose();
+      f.ps.forEach(p=>{p.geometry.dispose();p.material.dispose();}); flows.splice(i,1); } }
+  // 3D beat labels (distance-adaptive size so they never scream)
+  for(let i=beatLabels.length-1;i>=0;i--){ const l=beatLabels[i]; l.t+=dt;
+    const d=camera.position.distanceTo(l.sp.position);
+    const w=Math.min(12,Math.max(2.6,d*0.21));
+    l.sp.scale.set(w,w*112/512,1);
+    l.sp.material.opacity=Math.min(1,l.t*3,Math.max(0,(l.dur-l.t))*2);
+    if(l.t>=l.dur){ scene.remove(l.sp); l.sp.material.map.dispose(); l.sp.material.dispose(); beatLabels.splice(i,1); } }
+  // proton arrows
+  for(let i=harrows.length-1;i>=0;i--){ const a=harrows[i]; a.t+=dt;
+    a.grp.position.y+=(a.down?-1:1)*dt*2.2;
+    const fade=Math.min(1,a.t*4,Math.max(0,(a.dur-a.t))*1.5);
+    a.grp.children.forEach(m=>m.material.opacity=0.95*fade);
+    if(a.t>=a.dur){ scene.remove(a.grp);
+      a.grp.children.forEach(m=>{m.geometry.dispose();m.material.dispose();}); harrows.splice(i,1); } }
+  if(tween){ tween.k=Math.min(1,tween.k+dt*1.2); const e=1-Math.pow(1-tween.k,3);
+    camera.position.lerpVectors(tween.p0,tween.p1,e); controls.target.lerpVectors(tween.t0,tween.t1,e);
+    if(tween.k>=1)tween=null; }
+  if(SEQ.cam){ const cc=SEQ.cam; cc.t+=dt; const kk=Math.min(1,cc.t/cc.dur), ee=kk<.5?2*kk*kk:1-Math.pow(-2*kk+2,2)/2;
+    camera.position.lerpVectors(cc.p0,cc.p1,ee); controls.target.lerpVectors(cc.t0,cc.t1,ee);
+    if(kk>=1)SEQ.cam=null; }
+  if(labelsOn)for(const sp of siteLabels){ const dd=camera.position.distanceTo(sp.position);
+    const w=Math.min(6,Math.max(1.6,dd*0.11)); sp.scale.set(w,w*64/256,1); }
+  flyStep(dt);
+  controls.update();
+  hud();
+  renderer.render(scene,camera);
+}
+showDossier('CI');
+log('chain running · NADH + FADH₂ feeding from the citric acid cycle · click any complex');
+window.__etc = { camera, controls, S, openScheme, showDossier, speak, startSeq, startStory, stopSeq, SEQ };
+$('loader').classList.add('done');
+animate();
+</script>
+</body>
+</html>
