@@ -144,7 +144,24 @@
     body.sheet-open #caption{bottom:calc(72vh + 6px)}
   }
 </style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
+<script>
+/* Boot watchdog (classic script: runs even if the 3D module below fails to load).
+   If the module never reports in, the loader would otherwise freeze with no explanation. */
+window.__etcBooted=false;
+setTimeout(function(){
+  if(window.__etcBooted)return;
+  var m=document.getElementById('loadMsg');
+  if(m&&!document.getElementById('loader').classList.contains('done')){
+    m.innerHTML='3D libraries failed to start.<br>Check: vendor/three.module.min.js reachable, and a browser with ES-module support (Chrome/Edge 89+, Firefox 108+, Safari 16.4+).<br><button class="btn" style="margin-top:10px" onclick="location.reload()">↻ Retry</button>';
+  }
+},45000);
+if(location.protocol==='file:'){
+  document.addEventListener('DOMContentLoaded',function(){
+    var m=document.getElementById('loadMsg');
+    if(m)m.innerHTML='Opened via file:// — browsers block data loading here.<br>Serve this folder over HTTP (e.g. <code>python3 -m http.server</code>) and open http://localhost:8000/etc.html';
+  });
+}
+</script>
 </head>
 <body>
 <div id="scene"></div>
@@ -281,7 +298,8 @@
 <div id="caption"><div id="capKick"></div><div id="capText"></div><div id="capFoot"><span id="capDots"></span><button id="capStop">✕ stop explanation</button></div></div>
 
 <script type="module">
-import * as THREE from 'three';
+window.__etcBooted=true;
+import * as THREE from './vendor/three.module.min.js';
 import { OrbitControls } from './vendor/OrbitControls.js';
 
 const $ = id => document.getElementById(id);
@@ -406,7 +424,21 @@ const mark=m=>{ try{ console.log('etc-load',m,Math.round(performance.now()-t0)+'
 const tick=()=>new Promise(r=>requestAnimationFrame(r));
 mark('module evaluated');
 $('loadMsg').textContent='fetching etc-data.json (real Cα traces)';
-const data = await fetch('./etc-data.json').then(r=>{ if(!r.ok)throw new Error('etc-data '+r.status); return r.json(); });
+async function fetchJSON(url,ms=20000){
+  const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),ms);
+  try{
+    const r=await fetch(url,{signal:ctl.signal});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return await r.json();
+  }finally{ clearTimeout(to); }
+}
+let data;
+try{ data=await fetchJSON('./etc-data.json'); }
+catch(e){
+  mark('json FAILED: '+((e&&e.name==='AbortError')?'timeout':(e&&e.message||e)));
+  $('loadMsg').innerHTML='could not load etc-data.json ('+((e&&e.name==='AbortError')?'timed out after 20s':(e&&e.message||e))+').<br><button class="btn" style="margin-top:10px" onclick="location.reload()">↻ Retry</button>';
+  throw e;
+}
 mark('json fetched');
 $('loadMsg').textContent='building '+data.complexes.length+' complexes…';
 const totalChains=data.complexes.reduce((a,c)=>a+c.chains.length,0);
